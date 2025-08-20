@@ -10,36 +10,17 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user, account }) {
-      try {
-        if (user) {
-          token.id = user.id || user.email || crypto.randomUUID()
-          token.email = user.email
-          token.name = user.name
-          token.image = user.image
-        }
-        if (account) {
-          token.provider = account.provider
-        }
-        return token
-      } catch (error) {
-        console.error("JWT callback error:", error)
-        return token
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id || user.email || "anonymous"
       }
+      return token
     },
     async session({ session, token }) {
-      try {
-        if (token && session.user) {
-          session.user.id = token.id as string
-          session.user.email = token.email as string
-          session.user.name = token.name as string
-          session.user.image = token.image as string
-        }
-        return session
-      } catch (error) {
-        console.error("Session callback error:", error)
-        return session
+      if (session.user) {
+        session.user.id = token.id as string
       }
+      return session
     },
   },
   pages: {
@@ -48,10 +29,8 @@ export const authOptions: NextAuthOptions = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
-  debug: false,
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || "fallback-secret-for-development",
 }
 
 const handler = NextAuth(authOptions)

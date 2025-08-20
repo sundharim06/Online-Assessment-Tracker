@@ -24,7 +24,7 @@ export default function HomePage() {
     if (status === "loading") {
       const timer = setTimeout(() => {
         setLoadingTimeout(true)
-      }, 5000) // 5 second timeout
+      }, 3000) // Reduced timeout to 3 seconds for faster error detection
 
       return () => clearTimeout(timer)
     } else {
@@ -38,17 +38,15 @@ export default function HomePage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <CardTitle className="text-red-600">Authentication Timeout</CardTitle>
-            <CardDescription>
-              Authentication is taking longer than expected. Please try refreshing or signing in again.
-            </CardDescription>
+            <CardTitle className="text-red-600">Authentication Error</CardTitle>
+            <CardDescription>Unable to load authentication. Please try signing in again.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Button onClick={() => router.push("/auth/signin")} className="w-full">
+              Go to Sign In
+            </Button>
             <Button onClick={() => window.location.reload()} className="w-full" variant="outline">
               Refresh Page
-            </Button>
-            <Button onClick={() => router.push("/auth/signin")} className="w-full">
-              Sign In Again
             </Button>
           </CardContent>
         </Card>
@@ -67,8 +65,26 @@ export default function HomePage() {
     )
   }
 
-  if (!session) {
+  if (status === "unauthenticated") {
     return null
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle>Authentication Required</CardTitle>
+            <CardDescription>Please sign in to continue</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => router.push("/auth/signin")} className="w-full">
+              Sign In
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

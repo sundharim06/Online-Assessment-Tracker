@@ -7,18 +7,48 @@ import { StudentRegistrationForm } from "@/components/student-registration-form"
 import { UserNav } from "@/components/user-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, AlertCircle } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 
 export default function HomePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [loadingTimeout, setLoadingTimeout] = useState(false)
+  const [registrationStatus, setRegistrationStatus] = useState<"checking" | "new" | "existing" | "error">("checking")
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/auth/signin")
     }
   }, [status, router])
+
+  useEffect(() => {
+    const checkRegistration = async () => {
+      if (session?.user?.email) {
+        try {
+          const response = await fetch("/api/students/check-registration", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: session.user.email }),
+          })
+
+          if (response.status === 409) {
+            setRegistrationStatus("existing")
+          } else if (response.ok) {
+            setRegistrationStatus("new")
+          } else {
+            setRegistrationStatus("error")
+          }
+        } catch (error) {
+          console.error("[v0] Registration check error:", error)
+          setRegistrationStatus("error")
+        }
+      }
+    }
+
+    if (status === "authenticated" && session?.user?.email) {
+      checkRegistration()
+    }
+  }, [session, status])
 
   useEffect(() => {
     if (status === "loading") {
@@ -80,6 +110,71 @@ export default function HomePage() {
           <CardContent>
             <Button onClick={() => router.push("/auth/signin")} className="w-full">
               Sign In
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (registrationStatus === "checking") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Checking registration status...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (registrationStatus === "existing") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="flex justify-between items-center p-4">
+          <h1 className="text-2xl font-bold text-gray-900">Assessment System</h1>
+          <UserNav />
+        </div>
+
+        <div className="flex items-center justify-center p-4">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CheckCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <CardTitle className="text-red-600">Assessment Already Completed</CardTitle>
+              <CardDescription>You have already registered and completed the assessment.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <p className="text-sm text-red-800">
+                  <strong>Multiple attempts are not allowed.</strong> Your assessment has been recorded and you cannot
+                  take it again.
+                </p>
+              </div>
+              <p className="text-sm text-gray-600 text-center">
+                If you believe this is an error, please contact your administrator.
+              </p>
+              <Button onClick={() => router.push("/results")} className="w-full">
+                View Results
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  if (registrationStatus === "error") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <CardTitle className="text-red-600">System Error</CardTitle>
+            <CardDescription>Unable to check registration status. Please try again.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => window.location.reload()} className="w-full">
+              Retry
             </Button>
           </CardContent>
         </Card>

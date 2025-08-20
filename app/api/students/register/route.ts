@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthSession } from "@/lib/auth"
-import { checkStudentExists, saveInitialRegistration } from "@/lib/registrations"
+import { checkStudentExists, saveInitialRegistration } from "@/lib/google-sheets"
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, rollNumber, phoneNumber, section, department, email, oauthId, profileImage } = body
+    const { name, rollNumber, phoneNumber, section, department } = body
 
     // Validate required fields
     if (!name || !rollNumber || !phoneNumber || !section || !department) {

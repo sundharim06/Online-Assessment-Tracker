@@ -14,7 +14,7 @@ export default function AuthError() {
       case "Configuration":
         return "There is a problem with the server configuration."
       case "AccessDenied":
-        return "Access denied. You do not have permission to sign in."
+        return "Access denied. Only @citchennai.net email addresses are allowed to access this system."
       case "Verification":
         return "The verification token has expired or has already been used."
       default:
@@ -30,6 +30,14 @@ export default function AuthError() {
           <CardDescription>{getErrorMessage(error)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {error === "AccessDenied" && (
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> You must use your official @citchennai.net email address to access this
+                assessment system.
+              </p>
+            </div>
+          )}
           <p className="text-sm text-gray-600 text-center">
             Please try signing in again or contact support if the problem persists.
           </p>

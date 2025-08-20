@@ -10,6 +10,16 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === "google") {
+        const email = user.email || profile?.email
+        if (!email?.endsWith("@citchennai.net")) {
+          console.log("[v0] Access denied for email:", email)
+          return false
+        }
+      }
+      return true
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id || user.email || "anonymous"

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, User, Phone, Hash, Building, GraduationCap } from "lucide-react"
+import { Loader2, User, Phone, Hash, Building, GraduationCap, Mail } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface FormData {
@@ -41,6 +41,16 @@ export function StudentRegistrationForm() {
     setIsLoading(true)
 
     try {
+      if (!session?.user?.email?.endsWith("@citchennai.net")) {
+        toast({
+          title: "Access Denied",
+          description: "Only @citchennai.net email addresses are allowed.",
+          variant: "destructive",
+        })
+        setIsLoading(false)
+        return
+      }
+
       const registrationData = {
         ...formData,
         email: session?.user?.email,
@@ -61,7 +71,7 @@ export function StudentRegistrationForm() {
       if (response.ok) {
         toast({
           title: "Registration Successful!",
-          description: "Redirecting to assessment...",
+          description: "You have been registered. Redirecting to assessment...",
         })
 
         sessionStorage.setItem("studentId", result.studentId.toString())
@@ -69,14 +79,29 @@ export function StudentRegistrationForm() {
         sessionStorage.setItem("studentSection", formData.section)
         sessionStorage.setItem("studentDepartment", formData.department)
         sessionStorage.setItem("studentEmail", session?.user?.email || "")
+        sessionStorage.setItem("studentPhone", formData.phoneNumber)
+        sessionStorage.setItem("registrationComplete", "true")
 
-        router.push("/assessment")
+        setTimeout(() => {
+          router.push("/assessment")
+        }, 1000)
       } else {
-        toast({
-          title: "Registration Failed",
-          description: result.error || "Please try again",
-          variant: "destructive",
-        })
+        if (response.status === 409) {
+          toast({
+            title: "Already Registered",
+            description: "You have already completed the assessment and cannot attempt it again.",
+            variant: "destructive",
+          })
+          setTimeout(() => {
+            window.location.reload()
+          }, 2000)
+        } else {
+          toast({
+            title: "Registration Failed",
+            description: result.error || "Please try again",
+            variant: "destructive",
+          })
+        }
       }
     } catch (error) {
       toast({
@@ -93,6 +118,21 @@ export function StudentRegistrationForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="email" className="flex items-center gap-2">
+          <Mail className="h-4 w-4" />
+          Email Address
+        </Label>
+        <Input
+          id="email"
+          type="email"
+          value={session?.user?.email || ""}
+          disabled
+          className="bg-gray-50 text-gray-600"
+        />
+        <p className="text-xs text-gray-500">This is your authenticated email address</p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="name" className="flex items-center gap-2">
           <User className="h-4 w-4" />
@@ -177,6 +217,13 @@ export function StudentRegistrationForm() {
             <SelectItem value="Information Technology">Information Technology</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+        <p className="text-xs text-yellow-800">
+          <strong>Important:</strong> You can only attempt this assessment once. Make sure all your details are correct
+          before proceeding.
+        </p>
       </div>
 
       <Button

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const studentName = body.studentName || "Unknown Student"
     const studentSection = body.studentSection || "Unknown"
     const studentDepartment = body.studentDepartment || "Unknown"
-    const studentEmail = body.studentEmail || sessionStorage.getItem("studentEmail")
+    const studentEmail = body.studentEmail
 
     const questions = await fetchQuestions()
 

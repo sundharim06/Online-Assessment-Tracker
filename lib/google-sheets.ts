@@ -77,11 +77,17 @@ export interface Student {
 export interface Result {
   name: string
   rollNumber: string
+  phoneNumber: string
   section: string
   department: string
+  email: string
   score: number
   totalQuestions: number
+  percentage: string
   submittedAt: string
+  status: string
+  oauthProvider?: string
+  profileImage?: string
 }
 
 export interface ExamConfig {
@@ -219,14 +225,20 @@ export async function saveResult(result: Result): Promise<void> {
     await sheet.addRow({
       Name: result.name,
       "Roll Number": result.rollNumber,
+      "Phone Number": result.phoneNumber,
       Section: result.section,
       Department: result.department,
+      Email: result.email,
       Score: result.score,
       "Total Questions": result.totalQuestions,
+      Percentage: result.percentage,
       "Submitted At": indianTime,
+      Status: result.status,
+      "OAuth Provider": result.oauthProvider || "Google",
+      "Profile Image": result.profileImage || "",
     })
 
-    console.log("[v0] Successfully saved result with Indian time:", indianTime)
+    console.log("[v0] Successfully saved result with OAuth data and Indian time:", indianTime)
   } catch (error) {
     console.error("[v0] Error saving result:", error)
     throw new Error("Failed to save result to Google Sheets")
@@ -243,14 +255,124 @@ export async function getAllResults(): Promise<Result[]> {
     return rows.map((row) => ({
       name: row.get("Name") || "",
       rollNumber: row.get("Roll Number") || "",
+      phoneNumber: row.get("Phone Number") || "",
       section: row.get("Section") || "",
       department: row.get("Department") || "",
+      email: row.get("Email") || "",
       score: Number.parseInt(row.get("Score") || "0"),
       totalQuestions: Number.parseInt(row.get("Total Questions") || "0"),
+      percentage: row.get("Percentage") || "0%",
       submittedAt: row.get("Submitted At") || "",
+      status: row.get("Status") || "Completed",
+      oauthProvider: row.get("OAuth Provider") || "",
+      profileImage: row.get("Profile Image") || "",
     }))
   } catch (error) {
     console.error("[v0] Error fetching results:", error)
     throw new Error("Failed to fetch results from Google Sheets")
+  }
+}
+
+export async function checkStudentExists(email: string): Promise<boolean> {
+  try {
+    if (!process.env.RESULTS_SHEET_ID) {
+      throw new Error("RESULTS_SHEET_ID environment variable is not set")
+    }
+
+    console.log("[v0] Checking if student exists:", email)
+    const doc = await getGoogleSheet(process.env.RESULTS_SHEET_ID!)
+    const sheet = doc.sheetsByIndex[0]
+    const rows = await sheet.getRows()
+
+    const exists = rows.some((row) => row.get("Email") === email)
+    console.log("[v0] Student exists check result:", exists)
+    return exists
+  } catch (error) {
+    console.error("[v0] Error checking student existence:", error)
+    return false
+  }
+}
+
+export async function saveInitialRegistration(studentData: {
+  name: string
+  rollNumber: string
+  phoneNumber: string
+  section: string
+  department: string
+  email: string
+  oauthProvider: string
+  profileImage: string
+}): Promise<void> {
+  try {
+    if (!process.env.RESULTS_SHEET_ID) {
+      throw new Error("RESULTS_SHEET_ID environment variable is not set")
+    }
+
+    console.log("[v0] Saving initial registration for:", studentData.email)
+    const doc = await getGoogleSheet(process.env.RESULTS_SHEET_ID!)
+    const sheet = doc.sheetsByIndex[0]
+
+    const indianTime = formatIndianTime(new Date())
+
+    await sheet.addRow({
+      Name: studentData.name,
+      "Roll Number": studentData.rollNumber,
+      "Phone Number": studentData.phoneNumber,
+      Section: studentData.section,
+      Department: studentData.department,
+      Email: studentData.email,
+      Score: 0,
+      "Total Questions": 0,
+      Percentage: "0%",
+      "Submitted At": indianTime,
+      Status: "Registered",
+      "OAuth Provider": studentData.oauthProvider,
+      "Profile Image": studentData.profileImage,
+    })
+
+    console.log("[v0] Successfully saved initial registration")
+  } catch (error) {
+    console.error("[v0] Error saving initial registration:", error)
+    throw new Error("Failed to save initial registration")
+  }
+}
+
+export async function updateStudentScore(
+  email: string,
+  scoreData: {
+    score: number
+    totalQuestions: number
+    percentage: string
+    status: string
+  },
+): Promise<void> {
+  try {
+    if (!process.env.RESULTS_SHEET_ID) {
+      throw new Error("RESULTS_SHEET_ID environment variable is not set")
+    }
+
+    console.log("[v0] Updating score for student:", email)
+    const doc = await getGoogleSheet(process.env.RESULTS_SHEET_ID!)
+    const sheet = doc.sheetsByIndex[0]
+    const rows = await sheet.getRows()
+
+    const studentRow = rows.find((row) => row.get("Email") === email)
+    if (!studentRow) {
+      throw new Error("Student not found in results sheet")
+    }
+
+    const indianTime = formatIndianTime(new Date())
+
+    studentRow.set("Score", scoreData.score)
+    studentRow.set("Total Questions", scoreData.totalQuestions)
+    studentRow.set("Percentage", scoreData.percentage)
+    studentRow.set("Submitted At", indianTime)
+    studentRow.set("Status", scoreData.status)
+
+    await studentRow.save()
+    console.log("[v0] Successfully updated student score")
+  } catch (error) {
+    console.error("[v0] Error updating student score:", error)
+    throw new Error("Failed to update student score")
   }
 }

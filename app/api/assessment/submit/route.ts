@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { fetchQuestions, saveResult } from "@/lib/google-sheets"
+import { fetchQuestions, updateStudentScore } from "@/lib/google-sheets"
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
     const studentName = body.studentName || "Unknown Student"
     const studentSection = body.studentSection || "Unknown"
     const studentDepartment = body.studentDepartment || "Unknown"
+    const studentEmail = body.studentEmail || sessionStorage.getItem("studentEmail")
 
     const questions = await fetchQuestions()
 
@@ -88,32 +89,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const now = new Date()
-    const indianTime = now.toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    })
+    const percentage = totalPossibleMarks > 0 ? Math.round((totalScore / totalPossibleMarks) * 100) : 0
 
-    const result = {
-      name: studentName,
-      rollNumber: studentId,
-      section: studentSection,
-      department: studentDepartment,
-      score: totalScore,
-      totalQuestions,
-      totalPossibleMarks,
-      submittedAt: now.toISOString(), // Keep ISO for internal processing
+    if (studentEmail) {
+      await updateStudentScore(studentEmail, {
+        score: totalScore,
+        totalQuestions,
+        percentage: `${percentage}%`,
+        status: "Completed",
+      })
     }
 
-    await saveResult(result)
-
-    console.log("[v0] Assessment submitted and saved to Google Sheets:", result)
+    console.log("[v0] Assessment submitted and score updated in Google Sheets")
 
     return NextResponse.json({
       success: true,
@@ -122,7 +109,7 @@ export async function POST(request: NextRequest) {
         totalMarks: totalPossibleMarks,
         correctAnswers,
         wrongAnswers,
-        submittedAt: indianTime, // Return Indian formatted time to frontend
+        submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
         reviewData,
       },
     })

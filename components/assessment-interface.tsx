@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { signOut } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Clock, ChevronRight, CheckCircle, AlertCircle, Play } from "lucide-react"
+import { Clock, ChevronRight, CheckCircle, AlertCircle, Play, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { Question, ExamConfig } from "@/lib/google-sheets"
 
@@ -28,8 +29,223 @@ export function AssessmentInterface() {
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<number>>(new Set())
   const [examStarted, setExamStarted] = useState(false)
   const [examStartTime, setExamStartTime] = useState<Date | null>(null)
+  const [isRefreshDetected, setIsRefreshDetected] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+
+  const detectRefreshAndCleanup = () => {
+    const examInProgress = sessionStorage.getItem("examInProgress")
+    const examStartFlag = sessionStorage.getItem("examStarted")
+
+    const navigationEntries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[]
+    const isRefresh = navigationEntries.length > 0 && navigationEntries[0].type === "reload"
+
+    console.log("[v0] Navigation type:", navigationEntries[0]?.type)
+    console.log("[v0] Exam in progress:", examInProgress)
+    console.log("[v0] Exam started flag:", examStartFlag)
+
+    if (isRefresh && (examInProgress === "true" || examStartFlag === "true")) {
+      console.log("[v0] Page refresh detected during active exam - initiating security cleanup")
+      setIsRefreshDetected(true)
+
+      sessionStorage.removeItem("studentId")
+      sessionStorage.removeItem("studentName")
+      sessionStorage.removeItem("studentSection")
+      sessionStorage.removeItem("studentDepartment")
+      sessionStorage.removeItem("studentEmail")
+      sessionStorage.removeItem("studentPhone")
+      sessionStorage.removeItem("registrationComplete")
+      sessionStorage.removeItem("examInProgress")
+      sessionStorage.removeItem("examStarted")
+      sessionStorage.removeItem("assessmentResult")
+      sessionStorage.removeItem("reviewData")
+
+      if ("caches" in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => {
+            caches.delete(name)
+          })
+        })
+      }
+
+      setTimeout(() => {
+        signOut({
+          callbackUrl: "/auth/signin",
+          redirect: true,
+        })
+      }, 3000)
+
+      return true
+    }
+
+    return false
+  }
+
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (examStarted && !isSubmitting) {
+      e.preventDefault()
+      e.returnValue = "Are you sure you want to leave? Your exam progress will be lost."
+      return "Are you sure you want to leave? Your exam progress will be lost."
+    }
+  }
+
+  const handleUnload = () => {
+    const navigationEntries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[]
+    const isRefresh = navigationEntries.length > 0 && navigationEntries[0].type === "reload"
+
+    if (!isRefresh) {
+      sessionStorage.removeItem("examInProgress")
+    }
+  }
+
+  useEffect(() => {
+    const refreshDetected = detectRefreshAndCleanup()
+    if (refreshDetected) return
+
+    if (!isRefreshDetected) {
+      sessionStorage.setItem("examInProgress", "true")
+    }
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    window.addEventListener("unload", handleUnload)
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+      window.removeEventListener("unload", handleUnload)
+      if (!isRefreshDetected) {
+        sessionStorage.removeItem("examInProgress")
+      }
+    }
+  }, [examStarted, isSubmitting, isRefreshDetected])
+
+  useEffect(() => {
+    const loadAssessment = async () => {
+      try {
+        const studentId = sessionStorage.getItem("studentId")
+        const studentName = sessionStorage.getItem("studentName")
+
+        if (!studentId || !studentName) {
+          toast({
+            title: "Access Denied",
+            description: "Please register first to access the assessment",
+            variant: "destructive",
+          })
+          router.push("/")
+          return
+        }
+
+        setStudentInfo({ id: studentId, name: studentName })
+
+        const sessionId = `${studentId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+        console.log(`[v0] Fetching questions for session: ${sessionId}`)
+        const response = await fetch(`/api/questions?sessionId=${sessionId}&t=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+          },
+        })
+        const data = await response.json()
+
+        console.log("[v0] Full API response:", JSON.stringify(data, null, 2))
+        console.log("[v0] Session ID from response:", data.sessionId)
+        console.log("[v0] First question received:", data.questions?.[0]?.id)
+
+        if (response.ok && data.questions.length > 0) {
+          setQuestions(data.questions)
+          setExamConfig(data.examConfig)
+
+          const durationMinutes = data.examConfig?.examDurationMinutes || 60
+          const durationInSeconds = durationMinutes * 60
+
+          console.log("[v0] Duration from L2 cell:", durationMinutes, "minutes")
+          console.log("[v0] Converting to seconds:", durationInSeconds, "seconds")
+          console.log("[v0] Setting timeRemaining state to:", durationInSeconds)
+
+          setTimeRemaining(durationInSeconds)
+
+          setTimeout(() => {
+            console.log("[v0] Timer state after setting:", timeRemaining)
+          }, 100)
+
+          setAnswers(data.questions.map((q: Question) => ({ questionId: q.id, selectedAnswer: [], textAnswer: "" })))
+        } else {
+          toast({
+            title: "Assessment Not Available",
+            description: "The test has been disabled by the administrator. No questions are currently available.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("[v0] Error loading assessment:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load assessment. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (!isRefreshDetected) {
+      loadAssessment()
+    }
+  }, [router, toast, isRefreshDetected])
+
+  useEffect(() => {
+    if (timeRemaining > 0 && examStarted && questions.length > 0) {
+      const timer = setTimeout(() => setTimeRemaining(timeRemaining - 1), 1000)
+      return () => clearTimeout(timer)
+    } else if (timeRemaining === 0 && examStarted) {
+      toast({
+        title: "Time's Up!",
+        description: "Your assessment has been automatically submitted.",
+        variant: "destructive",
+      })
+      handleSubmit()
+    }
+  }, [timeRemaining, examStarted, questions.length])
+
+  if (isRefreshDetected) {
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-red-300 shadow-lg">
+          <CardHeader className="text-center bg-red-100">
+            <Shield className="h-16 w-16 text-red-600 mx-auto mb-4" />
+            <CardTitle className="text-2xl text-red-700">Security Violation Detected</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            <div className="bg-red-200 p-4 rounded-lg border border-red-300">
+              <p className="text-red-800 font-medium text-center">Page refresh detected during active examination</p>
+            </div>
+
+            <div className="space-y-3 text-sm text-red-700">
+              <p>• Your exam session has been terminated for security reasons</p>
+              <p>• All cached data has been cleared</p>
+              <p>• You cannot retake this examination</p>
+              <p>• Contact your administrator if this was an error</p>
+            </div>
+
+            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300">
+              <p className="text-yellow-800 text-sm text-center">
+                <strong>Redirecting to login page in 3 seconds...</strong>
+              </p>
+            </div>
+
+            <div className="text-center">
+              <Button onClick={() => signOut({ callbackUrl: "/auth/signin" })} variant="destructive" className="w-full">
+                Return to Login
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const getAnsweredCount = () =>
     answers.filter(
@@ -129,6 +345,8 @@ export function AssessmentInterface() {
     if (!studentInfo) return
 
     setIsSubmitting(true)
+    sessionStorage.removeItem("examInProgress")
+    sessionStorage.removeItem("examStarted")
 
     try {
       const response = await fetch("/api/assessment/submit", {
@@ -168,95 +386,6 @@ export function AssessmentInterface() {
     }
   }
 
-  useEffect(() => {
-    const loadAssessment = async () => {
-      try {
-        const studentId = sessionStorage.getItem("studentId")
-        const studentName = sessionStorage.getItem("studentName")
-
-        if (!studentId || !studentName) {
-          toast({
-            title: "Access Denied",
-            description: "Please register first to access the assessment",
-            variant: "destructive",
-          })
-          router.push("/")
-          return
-        }
-
-        setStudentInfo({ id: studentId, name: studentName })
-
-        const sessionId = `${studentId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-        console.log(`[v0] Fetching questions for session: ${sessionId}`)
-        const response = await fetch(`/api/questions?sessionId=${sessionId}&t=${Date.now()}`, {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
-          },
-        })
-        const data = await response.json()
-
-        console.log("[v0] Full API response:", JSON.stringify(data, null, 2))
-        console.log("[v0] Session ID from response:", data.sessionId)
-        console.log("[v0] First question received:", data.questions?.[0]?.id)
-
-        if (response.ok && data.questions.length > 0) {
-          setQuestions(data.questions)
-          setExamConfig(data.examConfig)
-
-          const durationMinutes = data.examConfig?.examDurationMinutes || 60
-          const durationInSeconds = durationMinutes * 60
-
-          console.log("[v0] Duration from L2 cell:", durationMinutes, "minutes")
-          console.log("[v0] Converting to seconds:", durationInSeconds, "seconds")
-          console.log("[v0] Setting timeRemaining state to:", durationInSeconds)
-
-          setTimeRemaining(durationInSeconds)
-
-          // Verify the state was set correctly
-          setTimeout(() => {
-            console.log("[v0] Timer state after setting:", timeRemaining)
-          }, 100)
-
-          setAnswers(data.questions.map((q: Question) => ({ questionId: q.id, selectedAnswer: [], textAnswer: "" })))
-        } else {
-          toast({
-            title: "Assessment Not Available",
-            description: "The test has been disabled by the administrator. No questions are currently available.",
-            variant: "destructive",
-          })
-        }
-      } catch (error) {
-        console.error("[v0] Error loading assessment:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load assessment. Please try again.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadAssessment()
-  }, [router, toast])
-
-  useEffect(() => {
-    if (timeRemaining > 0 && examStarted && questions.length > 0) {
-      const timer = setTimeout(() => setTimeRemaining(timeRemaining - 1), 1000)
-      return () => clearTimeout(timer)
-    } else if (timeRemaining === 0 && examStarted) {
-      toast({
-        title: "Time's Up!",
-        description: "Your assessment has been automatically submitted.",
-        variant: "destructive",
-      })
-      handleSubmit()
-    }
-  }, [timeRemaining, examStarted, questions.length])
-
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
@@ -268,6 +397,7 @@ export function AssessmentInterface() {
     console.log("[v0] Current timeRemaining when starting:", timeRemaining)
     setExamStarted(true)
     setExamStartTime(new Date())
+    sessionStorage.setItem("examStarted", "true")
     toast({
       title: "Exam Started",
       description: `You have ${examConfig?.examDurationMinutes} minutes to complete the assessment.`,
@@ -295,6 +425,23 @@ export function AssessmentInterface() {
                 <p>• Once you move to the next question, you cannot go back to change your answer</p>
                 <p>• Make sure to answer each question before proceeding</p>
                 <p>• The exam will auto-submit when time runs out</p>
+              </div>
+            </div>
+
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-center gap-2 text-red-800 mb-2">
+                <Shield className="h-5 w-5" />
+                <p className="font-medium">Security Notice</p>
+              </div>
+              <div className="space-y-1 text-sm text-red-700">
+                <p>
+                  • <strong>DO NOT refresh the page</strong> during the exam
+                </p>
+                <p>
+                  • <strong>DO NOT use browser back/forward buttons</strong>
+                </p>
+                <p>• Page refresh will terminate your exam session permanently</p>
+                <p>• You cannot retake the exam after any security violation</p>
               </div>
             </div>
 

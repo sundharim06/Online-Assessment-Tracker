@@ -9,6 +9,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setHasMounted(true)
+
+    const clearStaleExamData = () => {
+      const examInProgress = sessionStorage.getItem("examInProgress")
+      const examStarted = sessionStorage.getItem("examStarted")
+
+      // If there's stale exam data from a previous session, clear it
+      if (examInProgress === "true" || examStarted === "true") {
+        console.log("[v0] Clearing stale exam session data")
+        sessionStorage.removeItem("examInProgress")
+        sessionStorage.removeItem("examStarted")
+        sessionStorage.removeItem("studentId")
+        sessionStorage.removeItem("studentName")
+        sessionStorage.removeItem("studentSection")
+        sessionStorage.removeItem("studentDepartment")
+        sessionStorage.removeItem("studentEmail")
+        sessionStorage.removeItem("studentPhone")
+        sessionStorage.removeItem("registrationComplete")
+      }
+    }
+
+    clearStaleExamData()
   }, [])
 
   if (!hasMounted) {

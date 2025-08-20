@@ -187,7 +187,12 @@ export function AssessmentInterface() {
         setStudentInfo({ id: studentId, name: studentName })
 
         console.log("[v0] Fetching questions from API...")
-        const response = await fetch("/api/questions")
+        const response = await fetch(`/api/questions?t=${Date.now()}`, {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        })
         const data = await response.json()
 
         console.log("[v0] Full API response:", JSON.stringify(data, null, 2))
@@ -216,8 +221,8 @@ export function AssessmentInterface() {
           setAnswers(data.questions.map((q: Question) => ({ questionId: q.id, selectedAnswer: [], textAnswer: "" })))
         } else {
           toast({
-            title: "No Questions Available",
-            description: "Please wait for the administrator to upload questions",
+            title: "Assessment Not Available",
+            description: "The test has been disabled by the administrator. No questions are currently available.",
             variant: "destructive",
           })
         }

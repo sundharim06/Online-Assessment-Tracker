@@ -35,6 +35,12 @@ export async function GET() {
     console.log("[v0] All environment variables check passed")
     console.log("[v0] Questions Sheet ID:", process.env.QUESTIONS_SHEET_ID)
 
+    const headers = {
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    }
+
     const [questions, examConfig] = await Promise.all([fetchQuestions(), fetchExamConfig()])
 
     console.log(`[v0] Loaded ${questions.length} questions from Google Sheets`)
@@ -43,18 +49,27 @@ export async function GET() {
     if (questions.length === 0) {
       return NextResponse.json(
         {
-          error: "No questions found in the spreadsheet. Please check your Google Sheets data.",
+          error:
+            "Assessment is currently not available. The administrator has disabled the test by clearing the question sheet.",
         },
-        { status: 500 },
+        {
+          status: 500,
+          headers,
+        },
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      questions: questions,
-      total: questions.length,
-      examConfig: examConfig,
-    })
+    return NextResponse.json(
+      {
+        success: true,
+        questions: questions,
+        total: questions.length,
+        examConfig: examConfig,
+      },
+      {
+        headers,
+      },
+    )
   } catch (error) {
     console.error("[v0] Error fetching questions:", error)
 

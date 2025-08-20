@@ -1,9 +1,9 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,8 +20,9 @@ interface FormData {
 }
 
 export function StudentRegistrationForm() {
+  const { data: session } = useSession()
   const [formData, setFormData] = useState<FormData>({
-    name: "",
+    name: session?.user?.name || "",
     rollNumber: "",
     phoneNumber: "",
     section: "",
@@ -40,12 +41,19 @@ export function StudentRegistrationForm() {
     setIsLoading(true)
 
     try {
+      const registrationData = {
+        ...formData,
+        email: session?.user?.email,
+        oauthId: session?.user?.id,
+        profileImage: session?.user?.image,
+      }
+
       const response = await fetch("/api/students/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(registrationData),
       })
 
       const result = await response.json()
@@ -60,8 +68,8 @@ export function StudentRegistrationForm() {
         sessionStorage.setItem("studentName", formData.name)
         sessionStorage.setItem("studentSection", formData.section)
         sessionStorage.setItem("studentDepartment", formData.department)
+        sessionStorage.setItem("studentEmail", session?.user?.email || "")
 
-        // Redirect to assessment page
         router.push("/assessment")
       } else {
         toast({

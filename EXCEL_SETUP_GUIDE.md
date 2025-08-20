@@ -139,5 +139,5 @@ All Excel files are stored in: `[project-root]/data/`
 For issues or questions, check the troubleshooting section or review the Excel file formats.
 \`\`\`
 
-```typescriptreact file="lib/firebase.ts" isDeleted="true"
+\`\`\`typescriptreact file="lib/firebase.ts" isDeleted="true"
 ...deleted...

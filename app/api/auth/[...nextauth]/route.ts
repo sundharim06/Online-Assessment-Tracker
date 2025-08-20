@@ -12,12 +12,12 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id
+        token.id = user.id || user.email
       }
       return token
     },
     async session({ session, token }) {
-      if (token) {
+      if (token && session.user) {
         session.user.id = token.id as string
       }
       return session
@@ -29,6 +29,8 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
   },
+  debug: process.env.NODE_ENV === "development",
+  secret: process.env.NEXTAUTH_SECRET,
 }
 
 const handler = NextAuth(authOptions)

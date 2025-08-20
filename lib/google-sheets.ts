@@ -6,22 +6,40 @@ export async function getGoogleSheet(spreadsheetId: string) {
   try {
     console.log("[v0] Initializing Google Sheets authentication...")
 
+    if (!spreadsheetId) {
+      throw new Error("Spreadsheet ID is required")
+    }
+
     let serviceAccountAuth: JWT
 
     if (process.env.GOOGLE_CREDS) {
-      // Use full JSON credentials from Vercel environment variable
-      const credentials = JSON.parse(process.env.GOOGLE_CREDS)
-      serviceAccountAuth = new JWT({
-        email: credentials.client_email,
-        key: credentials.private_key,
-        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-      })
-      console.log("[v0] Using GOOGLE_CREDS JSON credentials")
+      try {
+        // Use full JSON credentials from Vercel environment variable
+        const credentials = JSON.parse(process.env.GOOGLE_CREDS)
+
+        if (!credentials.client_email || !credentials.private_key) {
+          throw new Error("Invalid GOOGLE_CREDS: missing client_email or private_key")
+        }
+
+        serviceAccountAuth = new JWT({
+          email: credentials.client_email,
+          key: credentials.private_key,
+          scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+        })
+        console.log("[v0] Using GOOGLE_CREDS JSON credentials for:", credentials.client_email)
+      } catch (parseError) {
+        console.error("[v0] Error parsing GOOGLE_CREDS:", parseError)
+        throw new Error("Invalid GOOGLE_CREDS JSON format")
+      }
     } else {
       // Fallback to separate environment variables
+      const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
       let privateKey = process.env.GOOGLE_PRIVATE_KEY
-      if (!privateKey) {
-        throw new Error("Either GOOGLE_CREDS or GOOGLE_PRIVATE_KEY environment variable must be set")
+
+      if (!email || !privateKey) {
+        throw new Error(
+          "Missing required environment variables. Set either GOOGLE_CREDS or both GOOGLE_PRIVATE_KEY and GOOGLE_SERVICE_ACCOUNT_EMAIL",
+        )
       }
 
       // Remove quotes and handle newlines properly
@@ -33,11 +51,11 @@ export async function getGoogleSheet(spreadsheetId: string) {
       }
 
       serviceAccountAuth = new JWT({
-        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        email: email,
         key: privateKey,
         scopes: ["https://www.googleapis.com/auth/spreadsheets"],
       })
-      console.log("[v0] Using separate GOOGLE_PRIVATE_KEY and GOOGLE_SERVICE_ACCOUNT_EMAIL")
+      console.log("[v0] Using separate credentials for:", email)
     }
 
     const doc = new GoogleSpreadsheet(spreadsheetId, serviceAccountAuth)
@@ -96,6 +114,10 @@ export interface ExamConfig {
 // Fetch questions from Google Sheets
 export async function fetchQuestions(): Promise<Question[]> {
   try {
+    if (!process.env.QUESTIONS_SHEET_ID) {
+      throw new Error("QUESTIONS_SHEET_ID environment variable is not set")
+    }
+
     console.log("[v0] Fetching questions from sheet ID:", process.env.QUESTIONS_SHEET_ID)
     const doc = await getGoogleSheet(process.env.QUESTIONS_SHEET_ID!)
     const sheet = doc.sheetsByIndex[0] // First sheet
@@ -103,6 +125,10 @@ export async function fetchQuestions(): Promise<Question[]> {
     console.log("[v0] Loading rows from sheet:", sheet.title)
     const rows = await sheet.getRows()
     console.log("[v0] Found", rows.length, "questions")
+
+    if (rows.length === 0) {
+      throw new Error("No questions found in the spreadsheet")
+    }
 
     return rows.map((row, index) => {
       const questionType = (row.get("Question Type") || "MCQ").toUpperCase() as "MCQ" | "NAT" | "MSQ"
@@ -126,12 +152,16 @@ export async function fetchQuestions(): Promise<Question[]> {
     })
   } catch (error) {
     console.error("[v0] Error fetching questions:", error)
-    throw new Error("Failed to fetch questions from Google Sheets")
+    throw error
   }
 }
 
 export async function fetchExamConfig(): Promise<ExamConfig> {
   try {
+    if (!process.env.QUESTIONS_SHEET_ID) {
+      throw new Error("QUESTIONS_SHEET_ID environment variable is not set")
+    }
+
     console.log("[v0] Fetching exam config from sheet ID:", process.env.QUESTIONS_SHEET_ID)
     const doc = await getGoogleSheet(process.env.QUESTIONS_SHEET_ID!)
     const sheet = doc.sheetsByIndex[0] // First sheet
@@ -141,7 +171,6 @@ export async function fetchExamConfig(): Promise<ExamConfig> {
     const rawDuration = rows[1]?.get("Exam Duration")
     console.log("[v0] Raw exam duration value from L2:", rawDuration)
     console.log("[v0] Type of raw duration:", typeof rawDuration)
-    console.log("[v0] Row 1 (L2) full data:", rows[1]?._rawData)
 
     let examDurationMinutes = 60 // Default fallback
     if (rawDuration !== undefined && rawDuration !== null && rawDuration !== "") {

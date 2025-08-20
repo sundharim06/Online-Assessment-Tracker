@@ -4,67 +4,41 @@ import { JWT } from "google-auth-library"
 // Initialize Google Sheets client
 export async function getGoogleSheet(spreadsheetId: string) {
   try {
-    console.log("[v0] Initializing Google Sheets authentication...")
+    console.log("[v0] Starting Google Sheets connection...")
 
     if (!spreadsheetId) {
-      throw new Error("Spreadsheet ID is required")
+      throw new Error("Missing spreadsheet ID")
     }
 
-    let serviceAccountAuth: JWT
-
-    if (process.env.GOOGLE_CREDS) {
-      try {
-        // Use full JSON credentials from Vercel environment variable
-        const credentials = JSON.parse(process.env.GOOGLE_CREDS)
-
-        if (!credentials.client_email || !credentials.private_key) {
-          throw new Error("Invalid GOOGLE_CREDS: missing client_email or private_key")
-        }
-
-        serviceAccountAuth = new JWT({
-          email: credentials.client_email,
-          key: credentials.private_key,
-          scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-        })
-        console.log("[v0] Using GOOGLE_CREDS JSON credentials for:", credentials.client_email)
-      } catch (parseError) {
-        console.error("[v0] Error parsing GOOGLE_CREDS:", parseError)
-        throw new Error("Invalid GOOGLE_CREDS JSON format")
-      }
-    } else {
-      // Fallback to separate environment variables
-      const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-      let privateKey = process.env.GOOGLE_PRIVATE_KEY
-
-      if (!email || !privateKey) {
-        throw new Error(
-          "Missing required environment variables. Set either GOOGLE_CREDS or both GOOGLE_PRIVATE_KEY and GOOGLE_SERVICE_ACCOUNT_EMAIL",
-        )
-      }
-
-      // Remove quotes and handle newlines properly
-      privateKey = privateKey.replace(/^"|"$/g, "").replace(/\\n/g, "\n")
-
-      // Ensure the key has proper BEGIN/END markers
-      if (!privateKey.includes("-----BEGIN PRIVATE KEY-----")) {
-        throw new Error("Invalid private key format - missing BEGIN marker")
-      }
-
-      serviceAccountAuth = new JWT({
-        email: email,
-        key: privateKey,
-        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-      })
-      console.log("[v0] Using separate credentials for:", email)
+    if (!process.env.GOOGLE_CREDS) {
+      throw new Error("GOOGLE_CREDS environment variable not found")
     }
 
+    let credentials
+    try {
+      credentials = JSON.parse(process.env.GOOGLE_CREDS)
+    } catch (e) {
+      throw new Error("GOOGLE_CREDS is not valid JSON")
+    }
+
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error("GOOGLE_CREDS missing client_email or private_key")
+    }
+
+    const serviceAccountAuth = new JWT({
+      email: credentials.client_email,
+      key: credentials.private_key,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    })
+
+    console.log("[v0] Connecting to spreadsheet:", spreadsheetId)
     const doc = new GoogleSpreadsheet(spreadsheetId, serviceAccountAuth)
     await doc.loadInfo()
 
-    console.log("[v0] Successfully connected to Google Sheets:", doc.title)
+    console.log("[v0] Connected successfully to:", doc.title)
     return doc
   } catch (error) {
-    console.error("[v0] Google Sheets authentication error:", error)
+    console.error("[v0] Google Sheets error:", error)
     throw error
   }
 }

@@ -5,27 +5,34 @@ export async function GET() {
   try {
     console.log("[v0] Starting questions API request...")
 
-    if (!process.env.GOOGLE_CREDS) {
-      console.error("[v0] GOOGLE_CREDS environment variable is missing")
+    const requiredEnvVars = {
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY,
+      GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID,
+      QUESTIONS_SHEET_ID: process.env.QUESTIONS_SHEET_ID,
+      RESULTS_SHEET_ID: process.env.RESULTS_SHEET_ID,
+    }
+
+    console.log("[v0] Environment variables check:")
+    const missingVars = []
+    for (const [key, value] of Object.entries(requiredEnvVars)) {
+      console.log(`[v0] ${key}:`, value ? "✓ Set" : "✗ Missing")
+      if (!value) {
+        missingVars.push(key)
+      }
+    }
+
+    if (missingVars.length > 0) {
+      console.error(`[v0] Missing environment variables: ${missingVars.join(", ")}`)
       return NextResponse.json(
         {
-          error: "Google Sheets credentials not configured. Please add GOOGLE_CREDS environment variable.",
+          error: `Missing required environment variables: ${missingVars.join(", ")}. Please configure these in your Vercel dashboard.`,
         },
         { status: 500 },
       )
     }
 
-    if (!process.env.QUESTIONS_SHEET_ID) {
-      console.error("[v0] QUESTIONS_SHEET_ID environment variable is missing")
-      return NextResponse.json(
-        {
-          error: "Questions sheet ID not configured. Please add QUESTIONS_SHEET_ID environment variable.",
-        },
-        { status: 500 },
-      )
-    }
-
-    console.log("[v0] Environment variables check passed")
+    console.log("[v0] All environment variables check passed")
     console.log("[v0] Questions Sheet ID:", process.env.QUESTIONS_SHEET_ID)
 
     const [questions, examConfig] = await Promise.all([fetchQuestions(), fetchExamConfig()])

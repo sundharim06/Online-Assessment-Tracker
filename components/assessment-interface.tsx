@@ -204,7 +204,7 @@ export function AssessmentInterface() {
           setQuestions(data.questions)
           setExamConfig(data.examConfig)
 
-          const durationMinutes = data.examConfig?.examDurationMinutes || 60
+          const durationMinutes = data.examConfig?.examDurationMinutes || 45
           const durationInSeconds = durationMinutes * 60
 
           console.log("[v0] Duration from L2 cell:", durationMinutes, "minutes")

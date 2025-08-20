@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server"
 import { fetchQuestions, fetchExamConfig } from "@/lib/google-sheets"
 
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 export async function GET() {
   try {
     console.log("[v0] Starting questions API request...")
@@ -59,11 +68,14 @@ export async function GET() {
       )
     }
 
+    const shuffledQuestions = shuffleArray(questions)
+    console.log("[v0] Questions shuffled for randomized order")
+
     return NextResponse.json(
       {
         success: true,
-        questions: questions,
-        total: questions.length,
+        questions: shuffledQuestions,
+        total: shuffledQuestions.length,
         examConfig: examConfig,
       },
       {

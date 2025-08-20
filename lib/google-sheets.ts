@@ -164,7 +164,7 @@ export async function fetchExamConfig(): Promise<ExamConfig> {
     console.log("[v0] Raw exam duration value from L2:", rawDuration)
     console.log("[v0] Type of raw duration:", typeof rawDuration)
 
-    let examDurationMinutes = 60 // Default fallback
+    let examDurationMinutes = 45 // Default fallback changed to 45 minutes
     if (rawDuration !== undefined && rawDuration !== null && rawDuration !== "") {
       const parsed = Number.parseInt(String(rawDuration).trim())
       if (!isNaN(parsed) && parsed > 0) {
@@ -180,9 +180,9 @@ export async function fetchExamConfig(): Promise<ExamConfig> {
     }
   } catch (error) {
     console.error("[v0] Error fetching exam config:", error)
-    console.log("[v0] Using default 60 minutes due to error")
+    console.log("[v0] Using default 45 minutes due to error")
     return {
-      examDurationMinutes: 60,
+      examDurationMinutes: 45,
       totalQuestions: 0,
     }
   }

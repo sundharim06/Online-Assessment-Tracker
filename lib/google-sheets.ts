@@ -4,30 +4,34 @@ import { JWT } from "google-auth-library"
 // Initialize Google Sheets client
 export async function getGoogleSheet(spreadsheetId: string) {
   try {
-    console.log("[v0] Starting Google Sheets connection...")
+    console.log("[v0] Starting Google Sheets connection with individual env vars...")
+
+    // Check all required environment variables
+    const requiredEnvVars = {
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+      GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY,
+      GOOGLE_PROJECT_ID: process.env.GOOGLE_PROJECT_ID,
+    }
+
+    console.log("[v0] Environment variables check:")
+    for (const [key, value] of Object.entries(requiredEnvVars)) {
+      console.log(`[v0] ${key}:`, value ? "✓ Set" : "✗ Missing")
+      if (!value) {
+        throw new Error(`Missing required environment variable: ${key}`)
+      }
+    }
 
     if (!spreadsheetId) {
       throw new Error("Missing spreadsheet ID")
     }
 
-    if (!process.env.GOOGLE_CREDS) {
-      throw new Error("GOOGLE_CREDS environment variable not found")
-    }
+    // Format private key properly
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY!.replace(/\\n/g, "\n")
 
-    let credentials
-    try {
-      credentials = JSON.parse(process.env.GOOGLE_CREDS)
-    } catch (e) {
-      throw new Error("GOOGLE_CREDS is not valid JSON")
-    }
-
-    if (!credentials.client_email || !credentials.private_key) {
-      throw new Error("GOOGLE_CREDS missing client_email or private_key")
-    }
-
+    console.log("[v0] Creating JWT with email:", process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL)
     const serviceAccountAuth = new JWT({
-      email: credentials.client_email,
-      key: credentials.private_key,
+      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!,
+      key: privateKey,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     })
 
@@ -35,10 +39,10 @@ export async function getGoogleSheet(spreadsheetId: string) {
     const doc = new GoogleSpreadsheet(spreadsheetId, serviceAccountAuth)
     await doc.loadInfo()
 
-    console.log("[v0] Connected successfully to:", doc.title)
+    console.log("[v0] Successfully connected to:", doc.title)
     return doc
   } catch (error) {
-    console.error("[v0] Google Sheets error:", error)
+    console.error("[v0] Google Sheets connection error:", error)
     throw error
   }
 }
@@ -88,20 +92,33 @@ export interface ExamConfig {
 // Fetch questions from Google Sheets
 export async function fetchQuestions(): Promise<Question[]> {
   try {
+    console.log(
+      "[v0] Environment check for QUESTIONS_SHEET_ID:",
+      process.env.QUESTIONS_SHEET_ID ? "✓ Set" : "✗ Missing",
+    )
+
     if (!process.env.QUESTIONS_SHEET_ID) {
       throw new Error("QUESTIONS_SHEET_ID environment variable is not set")
     }
 
     console.log("[v0] Fetching questions from sheet ID:", process.env.QUESTIONS_SHEET_ID)
     const doc = await getGoogleSheet(process.env.QUESTIONS_SHEET_ID!)
-    const sheet = doc.sheetsByIndex[0] // First sheet
+    const sheet = doc.sheetsByIndex[0]
 
-    console.log("[v0] Loading rows from sheet:", sheet.title)
+    console.log("[v0] Sheet title:", sheet.title)
+    console.log("[v0] Loading rows...")
     const rows = await sheet.getRows()
-    console.log("[v0] Found", rows.length, "questions")
+    console.log("[v0] Total rows found:", rows.length)
 
     if (rows.length === 0) {
-      throw new Error("No questions found in the spreadsheet")
+      throw new Error("No questions found in the spreadsheet. Please check your sheet has data.")
+    }
+
+    if (rows.length > 0) {
+      console.log("[v0] First row data sample:")
+      console.log("[v0] Question:", rows[0].get("Question"))
+      console.log("[v0] Option A:", rows[0].get("Option A"))
+      console.log("[v0] Correct Answer:", rows[0].get("Correct Answer"))
     }
 
     return rows.map((row, index) => {
@@ -130,6 +147,7 @@ export async function fetchQuestions(): Promise<Question[]> {
   }
 }
 
+// Fetch exam config from Google Sheets
 export async function fetchExamConfig(): Promise<ExamConfig> {
   try {
     if (!process.env.QUESTIONS_SHEET_ID) {
@@ -186,9 +204,15 @@ function formatIndianTime(date: Date): string {
 // Save result to Google Sheets
 export async function saveResult(result: Result): Promise<void> {
   try {
+    console.log("[v0] Environment check for RESULTS_SHEET_ID:", process.env.RESULTS_SHEET_ID ? "✓ Set" : "✗ Missing")
+
+    if (!process.env.RESULTS_SHEET_ID) {
+      throw new Error("RESULTS_SHEET_ID environment variable is not set")
+    }
+
     console.log("[v0] Saving result for:", result.rollNumber)
     const doc = await getGoogleSheet(process.env.RESULTS_SHEET_ID!)
-    const sheet = doc.sheetsByIndex[0] // First sheet
+    const sheet = doc.sheetsByIndex[0]
 
     const indianTime = formatIndianTime(new Date(result.submittedAt))
 

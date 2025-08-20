@@ -4,27 +4,41 @@ import { JWT } from "google-auth-library"
 // Initialize Google Sheets client
 export async function getGoogleSheet(spreadsheetId: string) {
   try {
-    // Handle private key formatting more robustly
-    let privateKey = process.env.GOOGLE_PRIVATE_KEY
-    if (!privateKey) {
-      throw new Error("GOOGLE_PRIVATE_KEY environment variable is not set")
-    }
-
-    // Remove quotes and handle newlines properly
-    privateKey = privateKey.replace(/^"|"$/g, "").replace(/\\n/g, "\n")
-
-    // Ensure the key has proper BEGIN/END markers
-    if (!privateKey.includes("-----BEGIN PRIVATE KEY-----")) {
-      throw new Error("Invalid private key format - missing BEGIN marker")
-    }
-
     console.log("[v0] Initializing Google Sheets authentication...")
 
-    const serviceAccountAuth = new JWT({
-      email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      key: privateKey,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-    })
+    let serviceAccountAuth: JWT
+
+    if (process.env.GOOGLE_CREDS) {
+      // Use full JSON credentials from Vercel environment variable
+      const credentials = JSON.parse(process.env.GOOGLE_CREDS)
+      serviceAccountAuth = new JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      })
+      console.log("[v0] Using GOOGLE_CREDS JSON credentials")
+    } else {
+      // Fallback to separate environment variables
+      let privateKey = process.env.GOOGLE_PRIVATE_KEY
+      if (!privateKey) {
+        throw new Error("Either GOOGLE_CREDS or GOOGLE_PRIVATE_KEY environment variable must be set")
+      }
+
+      // Remove quotes and handle newlines properly
+      privateKey = privateKey.replace(/^"|"$/g, "").replace(/\\n/g, "\n")
+
+      // Ensure the key has proper BEGIN/END markers
+      if (!privateKey.includes("-----BEGIN PRIVATE KEY-----")) {
+        throw new Error("Invalid private key format - missing BEGIN marker")
+      }
+
+      serviceAccountAuth = new JWT({
+        email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        key: privateKey,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+      })
+      console.log("[v0] Using separate GOOGLE_PRIVATE_KEY and GOOGLE_SERVICE_ACCOUNT_EMAIL")
+    }
 
     const doc = new GoogleSpreadsheet(spreadsheetId, serviceAccountAuth)
     await doc.loadInfo()

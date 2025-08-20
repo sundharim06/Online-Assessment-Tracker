@@ -10,9 +10,12 @@ function shuffleArray<T>(array: T[]): T[] {
   return shuffled
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    console.log("[v0] Starting questions API request...")
+    const { searchParams } = new URL(request.url)
+    const sessionId = searchParams.get("sessionId") || Date.now().toString()
+
+    console.log(`[v0] Starting questions API request for session: ${sessionId}`)
 
     const requiredEnvVars = {
       GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -45,9 +48,11 @@ export async function GET() {
     console.log("[v0] Questions Sheet ID:", process.env.QUESTIONS_SHEET_ID)
 
     const headers = {
-      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Cache-Control": "no-cache, no-store, must-revalidate, private, max-age=0",
       Pragma: "no-cache",
       Expires: "0",
+      Vary: "*",
+      "X-Session-ID": sessionId,
     }
 
     const [questions, examConfig] = await Promise.all([fetchQuestions(), fetchExamConfig()])
@@ -68,15 +73,31 @@ export async function GET() {
       )
     }
 
-    const shuffledQuestions = shuffleArray(questions)
-    console.log("[v0] Questions shuffled for randomized order")
+    const sessionSeed = sessionId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
+    Math.seedrandom = Math.seedrandom || (() => Math.random())
+
+    // Create a seeded random function for this session
+    const seededRandom = () => {
+      const x = Math.sin(sessionSeed + Date.now()) * 10000
+      return x - Math.floor(x)
+    }
+
+    // Use seeded randomization for consistent shuffling per session
+    const shuffled = [...questions]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(seededRandom() * (i + 1))
+      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+
+    console.log(`[v0] Questions shuffled for session ${sessionId} - First question ID: ${shuffled[0]?.id}`)
 
     return NextResponse.json(
       {
         success: true,
-        questions: shuffledQuestions,
-        total: shuffledQuestions.length,
+        questions: shuffled,
+        total: shuffled.length,
         examConfig: examConfig,
+        sessionId: sessionId,
       },
       {
         headers,

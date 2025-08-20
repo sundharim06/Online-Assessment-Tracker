@@ -186,25 +186,27 @@ export function AssessmentInterface() {
 
         setStudentInfo({ id: studentId, name: studentName })
 
-        console.log("[v0] Fetching questions from API...")
-        const response = await fetch(`/api/questions?t=${Date.now()}`, {
+        const sessionId = `${studentId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+        console.log(`[v0] Fetching questions for session: ${sessionId}`)
+        const response = await fetch(`/api/questions?sessionId=${sessionId}&t=${Date.now()}`, {
           cache: "no-store",
           headers: {
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
           },
         })
         const data = await response.json()
 
         console.log("[v0] Full API response:", JSON.stringify(data, null, 2))
-        console.log("[v0] Exam config received:", data.examConfig)
-        console.log("[v0] Exam duration from API:", data.examConfig?.examDurationMinutes)
-        console.log("[v0] Type of duration:", typeof data.examConfig?.examDurationMinutes)
+        console.log("[v0] Session ID from response:", data.sessionId)
+        console.log("[v0] First question received:", data.questions?.[0]?.id)
 
         if (response.ok && data.questions.length > 0) {
           setQuestions(data.questions)
           setExamConfig(data.examConfig)
 
-          const durationMinutes = data.examConfig?.examDurationMinutes || 45
+          const durationMinutes = data.examConfig?.examDurationMinutes || 60
           const durationInSeconds = durationMinutes * 60
 
           console.log("[v0] Duration from L2 cell:", durationMinutes, "minutes")

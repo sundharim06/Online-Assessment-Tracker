@@ -352,27 +352,82 @@ export async function updateStudentScore(
     }
 
     console.log("[v0] Updating score for student:", email)
+    console.log("[v0] Score data to update:", scoreData)
+
     const doc = await getGoogleSheet(process.env.RESULTS_SHEET_ID!)
     const sheet = doc.sheetsByIndex[0]
     const rows = await sheet.getRows()
 
-    const studentRow = rows.find((row) => row.get("Email") === email)
+    console.log("[v0] Total rows in sheet:", rows.length)
+
+    console.log("[v0] All emails in sheet:")
+    rows.forEach((row, index) => {
+      const rowEmail = row.get("Email")
+      console.log(`[v0] Row ${index + 1}: "${rowEmail}" (length: ${rowEmail?.length || 0})`)
+    })
+
+    console.log("[v0] Looking for email:", `"${email}" (length: ${email.length})`)
+
+    const studentRow = rows.find((row) => {
+      const rowEmail = row.get("Email")
+      if (!rowEmail) return false
+
+      const normalizedRowEmail = rowEmail.toString().trim().toLowerCase()
+      const normalizedSearchEmail = email.toString().trim().toLowerCase()
+
+      console.log("Comparing:", normalizedRowEmail, "vs", normalizedSearchEmail)
+      return normalizedRowEmail === normalizedSearchEmail
+    })
+
     if (!studentRow) {
-      throw new Error("Student not found in results sheet")
+      console.error("Student not found in results sheet")
+      console.error("Available emails:", rows.map((row) => row.get("Email")).filter(Boolean))
+      throw new Error(`Student with email "${email}" not found in results sheet`)
     }
+
+    console.log("Found student row, current values:")
+    console.log("Current Score:", studentRow.get("Score"))
+    console.log("Current Status:", studentRow.get("Status"))
+    console.log("Current Percentage:", studentRow.get("Percentage"))
 
     const indianTime = formatIndianTime(new Date())
 
-    studentRow.set("Score", scoreData.score)
-    studentRow.set("Total Questions", scoreData.totalQuestions)
+    studentRow.set("Score", scoreData.score.toString())
+    studentRow.set("Total Questions", scoreData.totalQuestions.toString())
     studentRow.set("Percentage", scoreData.percentage)
     studentRow.set("Submitted At", indianTime)
     studentRow.set("Status", scoreData.status)
 
+    console.log("About to save row with new values:")
+    console.log("New Score:", scoreData.score)
+    console.log("New Total Questions:", scoreData.totalQuestions)
+    console.log("New Percentage:", scoreData.percentage)
+    console.log("New Status:", scoreData.status)
+    console.log("New Submitted At:", indianTime)
+
     await studentRow.save()
-    console.log("[v0] Successfully updated student score")
+    console.log("Successfully updated and saved student score")
+
+    await sheet.loadCells() // Refresh sheet data
+    const updatedRows = await sheet.getRows()
+    const verifyRow = updatedRows.find((row) => {
+      const rowEmail = row.get("Email")
+      return rowEmail && rowEmail.toString().trim().toLowerCase() === email.toString().trim().toLowerCase()
+    })
+
+    if (verifyRow) {
+      console.log("Verification - Updated values in sheet:")
+      console.log("Verified Score:", verifyRow.get("Score"))
+      console.log("Verified Status:", verifyRow.get("Status"))
+      console.log("Verified Percentage:", verifyRow.get("Percentage"))
+    }
   } catch (error) {
-    console.error("[v0] Error updating student score:", error)
-    throw new Error("Failed to update student score")
+    console.error("Error updating student score:", error)
+    console.error("Error details:", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      email,
+      scoreData,
+    })
+    throw new Error(`Failed to update student score: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }

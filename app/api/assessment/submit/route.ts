@@ -94,7 +94,9 @@ export async function POST(request: NextRequest) {
 
     const examStatus =
       status === "terminated"
-        ? `Terminated - ${terminationReason === "cheated" ? "Cheating Detected" : "Security Violation"}`
+        ? terminationReason === "cheated"
+          ? "Terminated - Cheated"
+          : "Terminated - Security Violation"
         : "Completed"
 
     if (studentEmail) {

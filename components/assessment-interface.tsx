@@ -113,7 +113,6 @@ export function AssessmentInterface() {
       sessionStorage.removeItem("examStarted")
 
       try {
-        // Only include answered questions
         const answeredOnly = answers.filter(
           (answer) =>
             (answer.selectedAnswer && answer.selectedAnswer.length > 0) ||
@@ -127,7 +126,7 @@ export function AssessmentInterface() {
           },
           body: JSON.stringify({
             studentId: Number.parseInt(studentInfo.id),
-            answers: answeredOnly,
+            answers: answeredOnly, // Submit only answered questions
             studentName: studentInfo.name,
             studentSection: sessionStorage.getItem("studentSection") || "Unknown",
             studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
@@ -651,7 +650,7 @@ export function AssessmentInterface() {
             <div className="space-y-3 text-sm text-red-700">
               <p>• You switched tabs/windows {tabSwitchCount} times (limit: 2)</p>
               <p>• Your exam has been terminated for academic dishonesty</p>
-              <p>• Only answered questions have been submitted</p>
+              <p>• Only answered questions have been submitted for marking</p>
               <p>• Status: TERMINATED - CHEATED</p>
             </div>
 

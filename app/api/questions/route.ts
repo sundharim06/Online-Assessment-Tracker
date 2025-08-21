@@ -63,15 +63,30 @@ export async function GET(request: Request) {
       )
     }
 
-    const uniqueQuestions = questions.filter(
-      (question, index, self) =>
-        index === self.findIndex((q) => q.question.trim().toLowerCase() === question.question.trim().toLowerCase()),
-    )
+    const uniqueQuestions = questions.filter((question, index, self) => {
+      // First check by ID if available
+      if (question.id) {
+        return index === self.findIndex((q) => q.id === question.id)
+      }
+      // Fallback to question text comparison
+      return index === self.findIndex((q) => q.question.trim().toLowerCase() === question.question.trim().toLowerCase())
+    })
+
+    const seenIds = new Set()
+    const finalUniqueQuestions = uniqueQuestions.filter((question) => {
+      if (question.id && seenIds.has(question.id)) {
+        return false
+      }
+      if (question.id) {
+        seenIds.add(question.id)
+      }
+      return true
+    })
 
     const sessionSeed = sessionId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
     const seededRandom = seedrandom(sessionSeed.toString())
 
-    const shuffled = [...uniqueQuestions]
+    const shuffled = [...finalUniqueQuestions]
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(seededRandom() * (i + 1))
       ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
@@ -102,8 +117,8 @@ export async function GET(request: Request) {
         total: secureQuestions.length,
         examConfig: examConfig,
         sessionId: sessionId,
-        uniqueQuestionsFound: uniqueQuestions.length,
-        duplicatesRemoved: questions.length - uniqueQuestions.length,
+        uniqueQuestionsFound: finalUniqueQuestions.length,
+        duplicatesRemoved: questions.length - finalUniqueQuestions.length,
       },
       {
         headers,

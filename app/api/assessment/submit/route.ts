@@ -95,9 +95,11 @@ export async function POST(request: NextRequest) {
     const examStatus =
       status === "terminated"
         ? terminationReason === "cheated"
-          ? "Terminated - Cheated"
-          : "Terminated - Security Violation"
-        : "Completed"
+          ? "TERMINATED - CHEATED"
+          : terminationReason === "security_violation"
+            ? "TERMINATED - SECURITY VIOLATION"
+            : "TERMINATED"
+        : "COMPLETED"
 
     if (studentEmail) {
       try {
@@ -107,10 +109,11 @@ export async function POST(request: NextRequest) {
           percentage: `${percentage}%`,
           status: examStatus,
           ...(status === "terminated" && {
-            terminationReason,
+            terminationReason: terminationReason || "unknown",
             tabSwitchCount: tabSwitchCount || 0,
             answeredQuestions: totalQuestions,
             totalAvailableQuestions: questions.length,
+            partialCompletion: `${totalQuestions}/${questions.length} questions answered`,
           }),
         })
 

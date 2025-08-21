@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Clock, ChevronRight, CheckCircle, AlertCircle, Play, Shield } from "lucide-react"
+import { Clock, ChevronRight, ChevronLeft, CheckCircle, AlertCircle, Play, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedWindow } from "@/components/protected-window"
 import { KeyboardBlocker } from "@/components/keyboard-blocker"
@@ -33,18 +33,51 @@ export function AssessmentInterface() {
   const [examStarted, setExamStarted] = useState(false)
   const [examStartTime, setExamStartTime] = useState<Date | null>(null)
   const [isRefreshDetected, setIsRefreshDetected] = useState(false)
-  const [isProtectedMode, setIsProtectedMode] = useState(false) // Added protected mode state management
+  const [isProtectedMode, setIsProtectedMode] = useState(false)
   const [securityViolations, setSecurityViolations] = useState<string[]>([])
   const [violationCount, setViolationCount] = useState(0)
+  const [tabSwitchCount, setTabSwitchCount] = useState(0)
+  const [isExamTerminated, setIsExamTerminated] = useState(false)
+  const [terminationReason, setTerminationReason] = useState<string>("")
   const router = useRouter()
   const { toast } = useToast()
 
   const handleSecurityViolation = useCallback(
     (violation: string, details?: string) => {
-      // Added security violation handler
       const violationMessage = details ? `${violation}: ${details}` : violation
       setSecurityViolations((prev) => [...prev, violationMessage])
       setViolationCount((prev) => prev + 1)
+
+      // Track tab switches specifically
+      if (violation.includes("tab") || violation.includes("window") || violation.includes("focus")) {
+        setTabSwitchCount((prev) => {
+          const newCount = prev + 1
+
+          if (newCount >= 2) {
+            // Terminate exam after 2 tab switches
+            setIsExamTerminated(true)
+            setTerminationReason("cheated")
+            setIsProtectedMode(false)
+
+            toast({
+              title: "Exam Terminated - Cheating Detected",
+              description: "You have switched tabs/windows 2 times. Your exam has been terminated for cheating.",
+              variant: "destructive",
+            })
+
+            // Submit only answered questions with terminated status
+            submitTerminatedExam("cheated")
+            return newCount
+          } else {
+            toast({
+              title: `Tab Switch Warning (${newCount}/2)`,
+              description: "One more tab switch will terminate your exam permanently.",
+              variant: "destructive",
+            })
+            return newCount
+          }
+        })
+      }
 
       toast({
         title: "Security Violation",
@@ -53,7 +86,6 @@ export function AssessmentInterface() {
       })
 
       if (violationCount >= 4) {
-        // Auto-terminate exam after 5 violations
         toast({
           title: "Exam Terminated",
           description: "Too many security violations detected. Your exam has been terminated.",
@@ -72,11 +104,76 @@ export function AssessmentInterface() {
     [violationCount, toast],
   )
 
+  const submitTerminatedExam = useCallback(
+    async (reason: string) => {
+      if (!studentInfo) return
+
+      setIsSubmitting(true)
+      sessionStorage.removeItem("examInProgress")
+      sessionStorage.removeItem("examStarted")
+
+      try {
+        // Only include answered questions
+        const answeredOnly = answers.filter(
+          (answer) =>
+            (answer.selectedAnswer && answer.selectedAnswer.length > 0) ||
+            (answer.textAnswer && answer.textAnswer.trim().length > 0),
+        )
+
+        const response = await fetch("/api/assessment/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            studentId: Number.parseInt(studentInfo.id),
+            answers: answeredOnly,
+            studentName: studentInfo.name,
+            studentSection: sessionStorage.getItem("studentSection") || "Unknown",
+            studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
+            studentEmail: sessionStorage.getItem("studentEmail") || "",
+            status: "terminated",
+            terminationReason: reason,
+            tabSwitchCount: tabSwitchCount,
+          }),
+        })
+
+        const result = await response.json()
+
+        if (response.ok) {
+          sessionStorage.setItem(
+            "assessmentResult",
+            JSON.stringify({
+              ...result,
+              status: "terminated",
+              reason: reason,
+              answeredCount: answeredOnly.length,
+              totalQuestions: questions.length,
+            }),
+          )
+
+          setTimeout(() => {
+            router.push("/results")
+          }, 3000)
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to submit terminated exam.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    },
+    [studentInfo, answers, router, toast, tabSwitchCount, questions.length],
+  )
+
   const handleSubmit = useCallback(async () => {
     if (!studentInfo) return
 
     setIsSubmitting(true)
-    setIsProtectedMode(false) // Exit protected mode before submission
+    setIsProtectedMode(false)
     sessionStorage.removeItem("examInProgress")
     sessionStorage.removeItem("examStarted")
 
@@ -93,6 +190,7 @@ export function AssessmentInterface() {
           studentSection: sessionStorage.getItem("studentSection") || "Unknown",
           studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
           studentEmail: sessionStorage.getItem("studentEmail") || "",
+          status: "completed",
         }),
       })
 
@@ -323,6 +421,15 @@ export function AssessmentInterface() {
   }
 
   const handleAnswerSelect = (answer: "A" | "B" | "C" | "D" | "E" | "F") => {
+    if (answeredQuestions.has(currentQuestionIndex)) {
+      toast({
+        title: "Question Locked",
+        description: "You cannot change answers to previously completed questions.",
+        variant: "destructive",
+      })
+      return
+    }
+
     const currentQuestion = questions[currentQuestionIndex]
     const isMultipleChoice = currentQuestion.questionType === "MSQ"
 
@@ -350,6 +457,15 @@ export function AssessmentInterface() {
   }
 
   const handleTextAnswerChange = (value: string) => {
+    if (answeredQuestions.has(currentQuestionIndex)) {
+      toast({
+        title: "Question Locked",
+        description: "You cannot change answers to previously completed questions.",
+        variant: "destructive",
+      })
+      return
+    }
+
     const currentQuestion = questions[currentQuestionIndex]
 
     setAnswers((prev) =>
@@ -370,19 +486,19 @@ export function AssessmentInterface() {
       (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
       (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
 
-    if (!hasAnswer) {
-      toast({
-        title: "Answer Required",
-        description: "Please select an answer before proceeding to the next question.",
-        variant: "destructive",
-      })
-      return
+    // If question is answered, lock it
+    if (hasAnswer) {
+      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
     }
-
-    setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
 
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
+    }
+  }
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1)
     }
   }
 
@@ -519,6 +635,37 @@ export function AssessmentInterface() {
   const isNATQuestion = currentQuestion?.questionType === "NAT"
   const availableOptions = getAvailableOptions(currentQuestion)
 
+  if (isExamTerminated) {
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-red-300 shadow-lg">
+          <CardHeader className="text-center bg-red-100">
+            <Shield className="h-16 w-16 text-red-600 mx-auto mb-4" />
+            <CardTitle className="text-2xl text-red-700">Exam Terminated</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            <div className="bg-red-200 p-4 rounded-lg border border-red-300">
+              <p className="text-red-800 font-medium text-center">Cheating Detected - Tab Switching Limit Exceeded</p>
+            </div>
+
+            <div className="space-y-3 text-sm text-red-700">
+              <p>• You switched tabs/windows {tabSwitchCount} times (limit: 2)</p>
+              <p>• Your exam has been terminated for academic dishonesty</p>
+              <p>• Only answered questions have been submitted</p>
+              <p>• Status: TERMINATED - CHEATED</p>
+            </div>
+
+            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300">
+              <p className="text-yellow-800 text-sm text-center">
+                <strong>Redirecting to results page...</strong>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <ProtectedWindow
       enabled={isProtectedMode}
@@ -572,7 +719,8 @@ export function AssessmentInterface() {
                 <Badge variant="secondary">
                   {getAnsweredCount()} / {questions.length} Answered
                 </Badge>
-                {violationCount > 0 && ( // Added security violation counter
+                {tabSwitchCount > 0 && <Badge variant="destructive">Tab Switches: {tabSwitchCount}/2</Badge>}
+                {violationCount > 0 && (
                   <Badge variant="destructive">
                     {violationCount} Violation{violationCount !== 1 ? "s" : ""}
                   </Badge>
@@ -595,6 +743,11 @@ export function AssessmentInterface() {
                     <Badge variant="outline">
                       {currentQuestion.marks} Mark{currentQuestion.marks > 1 ? "s" : ""}
                     </Badge>
+                    {answeredQuestions.has(currentQuestionIndex) && (
+                      <Badge variant="secondary" className="bg-gray-200 text-gray-600">
+                        🔒 Locked
+                      </Badge>
+                    )}
                     {isNATQuestion ? (
                       <Badge variant="secondary" className="text-xs">
                         Fill in the blank
@@ -612,6 +765,7 @@ export function AssessmentInterface() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* ... existing question content ... */}
                 <div className="bg-gray-50 p-6 rounded-lg">
                   <div className="text-lg leading-relaxed space-y-2">
                     <p className="font-semibold text-gray-900">
@@ -637,21 +791,27 @@ export function AssessmentInterface() {
                       value={currentAnswer?.textAnswer || ""}
                       onChange={(e) => handleTextAnswerChange(e.target.value)}
                       placeholder="Type your answer here..."
-                      className="w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={answeredQuestions.has(currentQuestionIndex)}
+                      className={`w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        answeredQuestions.has(currentQuestionIndex) ? "bg-gray-100 cursor-not-allowed" : ""
+                      }`}
                     />
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
                     {availableOptions.map((option) => {
                       const isSelected = currentAnswer?.selectedAnswer?.includes(option.key) || false
+                      const isLocked = answeredQuestions.has(currentQuestionIndex)
 
                       return (
                         <div
                           key={option.key}
-                          onClick={() => handleAnswerSelect(option.key)}
-                          className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 ${
-                            isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
-                          }`}
+                          onClick={() => !isLocked && handleAnswerSelect(option.key)}
+                          className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
+                            isLocked
+                              ? "cursor-not-allowed bg-gray-100 border-gray-200"
+                              : "cursor-pointer hover:bg-blue-50"
+                          } ${isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}
                         >
                           <div className="flex items-center">
                             {isMultipleChoice ? (
@@ -659,6 +819,7 @@ export function AssessmentInterface() {
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => {}}
+                                disabled={isLocked}
                                 className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                               />
                             ) : (
@@ -666,11 +827,14 @@ export function AssessmentInterface() {
                                 type="radio"
                                 checked={isSelected}
                                 onChange={() => {}}
+                                disabled={isLocked}
                                 className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
                               />
                             )}
                           </div>
-                          <span className="font-medium text-gray-900 text-lg">{option.key}</span>
+                          <span className={`font-medium text-lg ${isLocked ? "text-gray-500" : "text-gray-900"}`}>
+                            {option.key}
+                          </span>
                         </div>
                       )
                     })}
@@ -679,7 +843,17 @@ export function AssessmentInterface() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end">
+            <div className="flex justify-between">
+              <Button
+                onClick={handlePreviousQuestion}
+                disabled={currentQuestionIndex === 0}
+                variant="outline"
+                className="flex items-center gap-2 bg-transparent"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+
               {currentQuestionIndex === questions.length - 1 ? (
                 <Button
                   onClick={handleSubmit}
@@ -699,11 +873,7 @@ export function AssessmentInterface() {
                   )}
                 </Button>
               ) : (
-                <Button
-                  onClick={handleNextQuestion}
-                  disabled={currentQuestionIndex === questions.length - 1}
-                  className="flex items-center gap-2"
-                >
+                <Button onClick={handleNextQuestion} className="flex items-center gap-2">
                   Next
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -714,7 +884,7 @@ export function AssessmentInterface() {
           <div className="w-80 bg-white shadow-sm border-l min-h-screen">
             <div className="p-4 border-b">
               <h3 className="font-semibold text-gray-900">Question Navigation</h3>
-              <p className="text-xs text-gray-500 mt-1">Answered questions are locked and cannot be changed</p>
+              <p className="text-xs text-gray-500 mt-1">🔒 = Locked (answered), ✓ = Current answer</p>
             </div>
             <div className="p-4 h-[calc(100vh-120px)] overflow-y-auto">
               <div className="grid grid-cols-5 gap-2">
@@ -724,27 +894,32 @@ export function AssessmentInterface() {
                     (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
 
                   const isLocked = answeredQuestions.has(index)
-                  const canNavigate = index <= currentQuestionIndex && !isLocked
+                  const canNavigate = true // Allow navigation to any question
 
                   return (
                     <button
                       key={index}
-                      onClick={() => (canNavigate ? setCurrentQuestionIndex(index) : null)}
+                      onClick={() => canNavigate && setCurrentQuestionIndex(index)}
                       disabled={!canNavigate}
-                      className={`w-12 h-12 rounded-lg text-sm font-medium transition-all ${
+                      className={`w-12 h-12 rounded-lg text-sm font-medium transition-all relative ${
                         index === currentQuestionIndex
                           ? "bg-blue-600 text-white shadow-lg"
                           : isLocked
-                            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            ? "bg-gray-300 text-gray-600 border-2 border-gray-400"
                             : hasAnswer
                               ? "bg-green-100 text-green-700 border border-green-300 hover:bg-green-200"
-                              : index < currentQuestionIndex
-                                ? "bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200"
-                                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
                       }`}
-                      title={isLocked ? "Question locked - cannot be changed" : `Question ${index + 1}`}
+                      title={
+                        isLocked
+                          ? "Question answered and locked"
+                          : hasAnswer
+                            ? "Question has current answer"
+                            : "Question not answered"
+                      }
                     >
                       {index + 1}
+                      {isLocked && <span className="absolute -top-1 -right-1 text-xs">🔒</span>}
                     </button>
                   )
                 })}

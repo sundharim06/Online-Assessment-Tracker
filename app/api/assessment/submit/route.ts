@@ -4,7 +4,7 @@ import { fetchQuestions, updateStudentScore } from "@/lib/google-sheets"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { studentId, answers } = body
+    const { studentId, answers, status, terminationReason, tabSwitchCount } = body
 
     if (!studentId || !answers || !Array.isArray(answers)) {
       return NextResponse.json({ error: "Invalid submission data" }, { status: 400 })
@@ -23,7 +23,13 @@ export async function POST(request: NextRequest) {
     let wrongAnswers = 0
     const totalQuestions = answers.length
 
-    const totalPossibleMarks = questions.reduce((sum, question) => sum + (question.marks || 1), 0)
+    const totalPossibleMarks =
+      status === "terminated"
+        ? answers.reduce((sum, answer) => {
+            const question = questions.find((q) => q.id === answer.questionId)
+            return sum + (question?.marks || 1)
+          }, 0)
+        : questions.reduce((sum, question) => sum + (question.marks || 1), 0)
 
     const reviewData: any[] = []
 
@@ -86,13 +92,24 @@ export async function POST(request: NextRequest) {
 
     const percentage = totalPossibleMarks > 0 ? Math.round((totalScore / totalPossibleMarks) * 100) : 0
 
+    const examStatus =
+      status === "terminated"
+        ? `Terminated - ${terminationReason === "cheated" ? "Cheating Detected" : "Security Violation"}`
+        : "Completed"
+
     if (studentEmail) {
       try {
         await updateStudentScore(studentEmail, {
           score: totalScore,
           totalQuestions,
           percentage: `${percentage}%`,
-          status: "Completed",
+          status: examStatus,
+          ...(status === "terminated" && {
+            terminationReason,
+            tabSwitchCount: tabSwitchCount || 0,
+            answeredQuestions: totalQuestions,
+            totalAvailableQuestions: questions.length,
+          }),
         })
 
         return NextResponse.json({
@@ -105,6 +122,11 @@ export async function POST(request: NextRequest) {
             wrongAnswers,
             submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
             reviewData,
+            status: examStatus,
+            terminationReason: terminationReason || null,
+            tabSwitchCount: tabSwitchCount || 0,
+            answeredQuestions: totalQuestions,
+            totalAvailableQuestions: questions.length,
           },
         })
       } catch (sheetError) {
@@ -119,6 +141,11 @@ export async function POST(request: NextRequest) {
             wrongAnswers,
             submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
             reviewData,
+            status: examStatus,
+            terminationReason: terminationReason || null,
+            tabSwitchCount: tabSwitchCount || 0,
+            answeredQuestions: totalQuestions,
+            totalAvailableQuestions: questions.length,
           },
         })
       }
@@ -134,6 +161,11 @@ export async function POST(request: NextRequest) {
           wrongAnswers,
           submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
           reviewData,
+          status: examStatus,
+          terminationReason: terminationReason || null,
+          tabSwitchCount: tabSwitchCount || 0,
+          answeredQuestions: totalQuestions,
+          totalAvailableQuestions: questions.length,
         },
       })
     }

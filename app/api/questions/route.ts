@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
 import { fetchQuestions, fetchExamConfig } from "@/lib/google-sheets"
-import seedrandom from "seedrandom"
+
+// Custom seeded random function
+function seededRandom(seed: number) {
+  const x = Math.sin(seed) * 10000
+  return x - Math.floor(x)
+}
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array]
@@ -84,11 +89,10 @@ export async function GET(request: Request) {
     })
 
     const sessionSeed = sessionId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    const seededRandom = seedrandom(sessionSeed.toString())
 
     const shuffled = [...finalUniqueQuestions]
     for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(seededRandom() * (i + 1))
+      const j = Math.floor(seededRandom(sessionSeed + i) * (i + 1))
       ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 

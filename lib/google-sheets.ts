@@ -347,17 +347,31 @@ export async function updateStudentScore(
     studentRow.set("Percentage", scoreData.percentage)
     studentRow.set("Submitted At", indianTime)
 
-    if (scoreData.status.includes("Terminated")) {
-      studentRow.set("Status", scoreData.status)
+    if (scoreData.status.includes("TERMINATED")) {
+      // Set clear terminated status
+      studentRow.set("Status", "TERMINATED")
 
+      // Add detailed termination information
       if (scoreData.terminationReason) {
-        const statusWithDetails = `${scoreData.status} (${scoreData.terminationReason === "cheated" ? "Tab Switches" : "Security"}: ${scoreData.tabSwitchCount || 0})`
-        studentRow.set("Status", statusWithDetails)
+        studentRow.set("Termination Reason", scoreData.terminationReason.toUpperCase())
+        studentRow.set("Tab Switch Count", (scoreData.tabSwitchCount || 0).toString())
       }
 
-      if (scoreData.answeredQuestions && scoreData.totalAvailableQuestions) {
-        const completionNote = `Answered ${scoreData.answeredQuestions}/${scoreData.totalAvailableQuestions} questions before termination`
-        studentRow.set("Notes", completionNote)
+      // Add completion details for terminated exams
+      if (scoreData.answeredQuestions !== undefined && scoreData.totalAvailableQuestions !== undefined) {
+        studentRow.set("Answered Questions", scoreData.answeredQuestions.toString())
+        studentRow.set("Total Available Questions", scoreData.totalAvailableQuestions.toString())
+
+        const completionNote = `TERMINATED - Answered ${scoreData.answeredQuestions}/${scoreData.totalAvailableQuestions} questions. Score: ${scoreData.score} marks earned before termination.`
+
+        // Check if Notes column exists, if not use a different approach
+        try {
+          studentRow.set("Notes", completionNote)
+        } catch {
+          // If Notes column doesn't exist, append to status
+          const detailedStatus = `TERMINATED (${scoreData.terminationReason?.toUpperCase() || "CHEATED"}) - ${scoreData.answeredQuestions}/${scoreData.totalAvailableQuestions} answered`
+          studentRow.set("Status", detailedStatus)
+        }
       }
     } else {
       studentRow.set("Status", scoreData.status)

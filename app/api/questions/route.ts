@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { fetchQuestions, fetchExamConfig } from "@/lib/google-sheets"
+import seedrandom from "seedrandom"
 
 function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array]
@@ -62,23 +63,24 @@ export async function GET(request: Request) {
       )
     }
 
+    const uniqueQuestions = questions.filter(
+      (question, index, self) =>
+        index === self.findIndex((q) => q.question.trim().toLowerCase() === question.question.trim().toLowerCase()),
+    )
+
     const sessionSeed = sessionId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    Math.seedrandom = Math.seedrandom || (() => Math.random())
+    const seededRandom = seedrandom(sessionSeed.toString())
 
-    // Create a seeded random function for this session
-    const seededRandom = () => {
-      const x = Math.sin(sessionSeed + Date.now()) * 10000
-      return x - Math.floor(x)
-    }
-
-    // Use seeded randomization for consistent shuffling per session
-    const shuffled = [...questions]
+    const shuffled = [...uniqueQuestions]
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(seededRandom() * (i + 1))
       ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    const secureQuestions = shuffled.map((question) => ({
+    const maxQuestions = examConfig?.totalQuestions || shuffled.length
+    const selectedQuestions = shuffled.slice(0, Math.min(maxQuestions, shuffled.length))
+
+    const secureQuestions = selectedQuestions.map((question) => ({
       id: question.id,
       question: question.question,
       optionA: question.optionA,
@@ -100,6 +102,8 @@ export async function GET(request: Request) {
         total: secureQuestions.length,
         examConfig: examConfig,
         sessionId: sessionId,
+        uniqueQuestionsFound: uniqueQuestions.length,
+        duplicatesRemoved: questions.length - uniqueQuestions.length,
       },
       {
         headers,

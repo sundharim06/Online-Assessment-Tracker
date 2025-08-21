@@ -78,6 +78,10 @@ export interface Result {
   status: string
   oauthProvider?: string
   profileImage?: string
+  terminationReason?: string
+  tabSwitchCount?: number
+  answeredQuestions?: number
+  totalAvailableQuestions?: number
 }
 
 export interface ExamConfig {
@@ -198,6 +202,10 @@ export async function saveResult(result: Result): Promise<void> {
       Status: result.status,
       "OAuth Provider": result.oauthProvider || "Google",
       "Profile Image": result.profileImage || "",
+      "Termination Reason": result.terminationReason || "",
+      "Tab Switch Count": result.tabSwitchCount || 0,
+      "Answered Questions": result.answeredQuestions || 0,
+      "Total Available Questions": result.totalAvailableQuestions || 0,
     })
   } catch (error) {
     throw new Error("Failed to save result to Google Sheets")
@@ -225,6 +233,10 @@ export async function getAllResults(): Promise<Result[]> {
       status: row.get("Status") || "Completed",
       oauthProvider: row.get("OAuth Provider") || "",
       profileImage: row.get("Profile Image") || "",
+      terminationReason: row.get("Termination Reason") || "",
+      tabSwitchCount: Number.parseInt(row.get("Tab Switch Count") || "0"),
+      answeredQuestions: Number.parseInt(row.get("Answered Questions") || "0"),
+      totalAvailableQuestions: Number.parseInt(row.get("Total Available Questions") || "0"),
     }))
   } catch (error) {
     throw new Error("Failed to fetch results from Google Sheets")
@@ -282,6 +294,10 @@ export async function saveInitialRegistration(studentData: {
       Status: "Registered",
       "OAuth Provider": studentData.oauthProvider,
       "Profile Image": studentData.profileImage,
+      "Termination Reason": "",
+      "Tab Switch Count": 0,
+      "Answered Questions": 0,
+      "Total Available Questions": 0,
     })
   } catch (error) {
     throw new Error("Failed to save initial registration")
@@ -295,6 +311,10 @@ export async function updateStudentScore(
     totalQuestions: number
     percentage: string
     status: string
+    terminationReason?: string
+    tabSwitchCount?: number
+    answeredQuestions?: number
+    totalAvailableQuestions?: number
   },
 ): Promise<void> {
   try {
@@ -326,7 +346,22 @@ export async function updateStudentScore(
     studentRow.set("Total Questions", scoreData.totalQuestions.toString())
     studentRow.set("Percentage", scoreData.percentage)
     studentRow.set("Submitted At", indianTime)
-    studentRow.set("Status", scoreData.status)
+
+    if (scoreData.status.includes("Terminated")) {
+      studentRow.set("Status", scoreData.status)
+
+      if (scoreData.terminationReason) {
+        const statusWithDetails = `${scoreData.status} (${scoreData.terminationReason === "cheated" ? "Tab Switches" : "Security"}: ${scoreData.tabSwitchCount || 0})`
+        studentRow.set("Status", statusWithDetails)
+      }
+
+      if (scoreData.answeredQuestions && scoreData.totalAvailableQuestions) {
+        const completionNote = `Answered ${scoreData.answeredQuestions}/${scoreData.totalAvailableQuestions} questions before termination`
+        studentRow.set("Notes", completionNote)
+      }
+    } else {
+      studentRow.set("Status", scoreData.status)
+    }
 
     await studentRow.save()
   } catch (error) {

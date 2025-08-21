@@ -15,8 +15,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get("sessionId") || Date.now().toString()
 
-    console.log(`[v0] Starting questions API request for session: ${sessionId}`)
-
     const requiredEnvVars = {
       GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY,
@@ -25,17 +23,14 @@ export async function GET(request: Request) {
       RESULTS_SHEET_ID: process.env.RESULTS_SHEET_ID,
     }
 
-    console.log("[v0] Environment variables check:")
     const missingVars = []
     for (const [key, value] of Object.entries(requiredEnvVars)) {
-      console.log(`[v0] ${key}:`, value ? "✓ Set" : "✗ Missing")
       if (!value) {
         missingVars.push(key)
       }
     }
 
     if (missingVars.length > 0) {
-      console.error(`[v0] Missing environment variables: ${missingVars.join(", ")}`)
       return NextResponse.json(
         {
           error: `Missing required environment variables: ${missingVars.join(", ")}. Please configure these in your Vercel dashboard.`,
@@ -43,9 +38,6 @@ export async function GET(request: Request) {
         { status: 500 },
       )
     }
-
-    console.log("[v0] All environment variables check passed")
-    console.log("[v0] Questions Sheet ID:", process.env.QUESTIONS_SHEET_ID)
 
     const headers = {
       "Cache-Control": "no-cache, no-store, must-revalidate, private, max-age=0",
@@ -56,9 +48,6 @@ export async function GET(request: Request) {
     }
 
     const [questions, examConfig] = await Promise.all([fetchQuestions(), fetchExamConfig()])
-
-    console.log(`[v0] Loaded ${questions.length} questions from Google Sheets`)
-    console.log(`[v0] Exam duration: ${examConfig.examDurationMinutes} minutes`)
 
     if (questions.length === 0) {
       return NextResponse.json(
@@ -89,13 +78,26 @@ export async function GET(request: Request) {
       ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
     }
 
-    console.log(`[v0] Questions shuffled for session ${sessionId} - First question ID: ${shuffled[0]?.id}`)
+    const secureQuestions = shuffled.map((question) => ({
+      id: question.id,
+      question: question.question,
+      optionA: question.optionA,
+      optionB: question.optionB,
+      optionC: question.optionC,
+      optionD: question.optionD,
+      optionE: question.optionE,
+      optionF: question.optionF,
+      questionType: question.questionType,
+      marks: question.marks,
+      // correctAnswer is intentionally excluded for security
+      // maxSelections is derived from questionType on frontend
+    }))
 
     return NextResponse.json(
       {
         success: true,
-        questions: shuffled,
-        total: shuffled.length,
+        questions: secureQuestions,
+        total: secureQuestions.length,
         examConfig: examConfig,
         sessionId: sessionId,
       },
@@ -104,8 +106,6 @@ export async function GET(request: Request) {
       },
     )
   } catch (error) {
-    console.error("[v0] Error fetching questions:", error)
-
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
     return NextResponse.json(
       {

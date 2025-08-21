@@ -47,8 +47,6 @@ export async function POST(request: NextRequest) {
         const correctAnswersArray = question.correctAnswer?.split(",").map((a) => a.trim().toUpperCase()) || []
         const studentAnswersArray = (answer.selectedAnswer || []).map((a: string) => a.trim().toUpperCase())
 
-        console.log("[v0] Question", question.id, "- Correct:", correctAnswersArray, "Student:", studentAnswersArray)
-
         // Check if student selected answers match correct answers exactly
         if (correctAnswersArray.length === 1) {
           // Single correct answer (MCQ)
@@ -67,10 +65,8 @@ export async function POST(request: NextRequest) {
       if (isCorrect) {
         totalScore += question.marks || 1
         correctAnswers++
-        console.log("[v0] Question", question.id, "marked as CORRECT")
       } else {
         wrongAnswers++
-        console.log("[v0] Question", question.id, "marked as WRONG")
         reviewData.push({
           questionNumber: questions.indexOf(question) + 1,
           question: question.question,
@@ -81,7 +77,6 @@ export async function POST(request: NextRequest) {
           optionE: question.optionE,
           optionF: question.optionF,
           studentAnswer: studentAnswerText,
-          correctAnswer: question.correctAnswer,
           questionType: question.questionType,
           marks: question.marks || 1,
           isCorrect: false,
@@ -93,14 +88,6 @@ export async function POST(request: NextRequest) {
 
     if (studentEmail) {
       try {
-        console.log("[v0] Attempting to update student score for:", studentEmail)
-        console.log("[v0] Score data:", {
-          score: totalScore,
-          totalQuestions,
-          percentage: `${percentage}%`,
-          status: "Completed",
-        })
-
         await updateStudentScore(studentEmail, {
           score: totalScore,
           totalQuestions,
@@ -108,31 +95,49 @@ export async function POST(request: NextRequest) {
           status: "Completed",
         })
 
-        console.log("[v0] Successfully updated student score in Google Sheets")
+        return NextResponse.json({
+          success: true,
+          sheetUpdated: true,
+          result: {
+            totalScore,
+            totalMarks: totalPossibleMarks,
+            correctAnswers,
+            wrongAnswers,
+            submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+            reviewData,
+          },
+        })
       } catch (sheetError) {
-        console.error("[v0] Failed to update Google Sheets:", sheetError)
-        // Continue with response even if sheet update fails
-        console.log("[v0] Continuing with response despite sheet update failure")
+        return NextResponse.json({
+          success: true,
+          sheetUpdated: false,
+          sheetError: sheetError instanceof Error ? sheetError.message : "Unknown error",
+          result: {
+            totalScore,
+            totalMarks: totalPossibleMarks,
+            correctAnswers,
+            wrongAnswers,
+            submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+            reviewData,
+          },
+        })
       }
     } else {
-      console.error("[v0] No student email provided, cannot update Google Sheets")
+      return NextResponse.json({
+        success: true,
+        sheetUpdated: false,
+        sheetError: "No student email provided",
+        result: {
+          totalScore,
+          totalMarks: totalPossibleMarks,
+          correctAnswers,
+          wrongAnswers,
+          submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          reviewData,
+        },
+      })
     }
-
-    console.log("[v0] Assessment submitted and score updated in Google Sheets")
-
-    return NextResponse.json({
-      success: true,
-      result: {
-        totalScore,
-        totalMarks: totalPossibleMarks,
-        correctAnswers,
-        wrongAnswers,
-        submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-        reviewData,
-      },
-    })
   } catch (error) {
-    console.error("[v0] Assessment submission error:", error)
     return NextResponse.json({ error: "Failed to submit assessment" }, { status: 500 })
   }
 }

@@ -317,18 +317,7 @@ export function AssessmentInterface() {
 
   const handleAnswerSelect = (answer: "A" | "B" | "C" | "D" | "E" | "F") => {
     const currentQuestion = questions[currentQuestionIndex]
-    const correctAnswersArray = currentQuestion.correctAnswer?.split(",").map((a) => a.trim()) || []
-    const isMultipleChoice =
-      correctAnswersArray.length > 1 || currentQuestion.questionType === "MSQ" || currentQuestion.maxSelections > 1
-
-    console.log(
-      "[v0] Question",
-      currentQuestion.id,
-      "allows multiple:",
-      isMultipleChoice,
-      "max selections:",
-      currentQuestion.maxSelections,
-    )
+    const isMultipleChoice = currentQuestion.questionType === "MSQ"
 
     setAnswers((prev) =>
       prev.map((ans) => {
@@ -336,7 +325,7 @@ export function AssessmentInterface() {
           if (isMultipleChoice) {
             const currentSelections = ans.selectedAnswer || []
             const isSelected = currentSelections.includes(answer)
-            const maxSelections = currentQuestion.maxSelections || correctAnswersArray.length
+            const maxSelections = 4
 
             if (isSelected) {
               return { ...ans, selectedAnswer: currentSelections.filter((a) => a !== answer) }
@@ -503,9 +492,7 @@ export function AssessmentInterface() {
   const currentQuestion = questions[currentQuestionIndex]
   const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100
-  const correctAnswersArray = currentQuestion?.correctAnswer?.split(",").map((a) => a.trim()) || []
-  const isMultipleChoice =
-    correctAnswersArray.length > 1 || currentQuestion?.questionType === "MSQ" || currentQuestion?.maxSelections > 1
+  const isMultipleChoice = currentQuestion?.questionType === "MSQ"
   const isNATQuestion = currentQuestion?.questionType === "NAT"
   const availableOptions = getAvailableOptions(currentQuestion)
 
@@ -559,7 +546,7 @@ export function AssessmentInterface() {
                     </Badge>
                   ) : isMultipleChoice ? (
                     <Badge variant="secondary" className="text-xs">
-                      Multiple Select - Choose {correctAnswersArray.length} options
+                      Multiple Select
                     </Badge>
                   ) : (
                     <Badge variant="secondary" className="text-xs">

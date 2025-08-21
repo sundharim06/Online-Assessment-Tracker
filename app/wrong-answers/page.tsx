@@ -17,7 +17,6 @@ interface ReviewQuestion {
   optionE?: string
   optionF?: string
   studentAnswer: string
-  correctAnswer: string
   questionType: string
   marks: number
   isCorrect: boolean
@@ -87,7 +86,7 @@ export default function WrongAnswersPage() {
                 <XCircle className="h-5 w-5 text-red-700" />
                 <span className="font-semibold text-red-900">
                   {reviewData.wrongAnswers.length} Incorrect Answer{reviewData.wrongAnswers.length > 1 ? "s" : ""} -
-                  Focus on these for improvement
+                  Review for improvement
                 </span>
               </div>
             </div>
@@ -118,24 +117,17 @@ export default function WrongAnswersPage() {
                     )}
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <XCircle className="h-5 w-5 text-red-700" />
-                        <span className="font-bold text-red-900">Your Wrong Answer</span>
-                      </div>
-                      <p className="text-red-800 font-semibold text-lg">
-                        {question.studentAnswer || "No answer provided"}
-                      </p>
+                  <div className="bg-red-100 border-2 border-red-300 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <XCircle className="h-5 w-5 text-red-700" />
+                      <span className="font-bold text-red-900">Your Answer</span>
                     </div>
-
-                    <div className="bg-green-100 border-2 border-green-300 rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CheckCircle className="h-5 w-5 text-green-700" />
-                        <span className="font-bold text-green-900">Correct Answer</span>
-                      </div>
-                      <p className="text-green-800 font-semibold text-lg">{question.correctAnswer}</p>
-                    </div>
+                    <p className="text-red-800 font-semibold text-lg">
+                      {question.studentAnswer || "No answer provided"}
+                    </p>
+                    <p className="text-red-600 text-sm mt-2">
+                      This answer was incorrect. Review the question and options carefully.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -144,8 +136,7 @@ export default function WrongAnswersPage() {
             <div className="text-center mt-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
               <h3 className="text-lg font-semibold text-blue-800 mb-2">Study Tip</h3>
               <p className="text-blue-700">
-                Review these {reviewData.wrongAnswers.length} questions carefully. Understanding why these answers are
-                correct will help you improve for future assessments.
+                Review these {reviewData.wrongAnswers.length} questions carefully for future improvement.
               </p>
             </div>
           </div>

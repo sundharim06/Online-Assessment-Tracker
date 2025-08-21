@@ -81,6 +81,7 @@ export function StudentRegistrationForm() {
         sessionStorage.setItem("studentEmail", session?.user?.email || "")
         sessionStorage.setItem("studentPhone", formData.phoneNumber)
         sessionStorage.setItem("registrationComplete", "true")
+        sessionStorage.setItem("examStarted", "true")
 
         setTimeout(() => {
           router.push("/assessment")

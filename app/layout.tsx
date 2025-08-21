@@ -4,7 +4,9 @@ import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
 import { AuthProvider } from "@/components/auth-provider"
+import { ErrorBoundary } from "@/components/error-boundary"
 import { Toaster } from "@/components/ui/toaster"
+import { GlobalRefreshProtection } from "@/components/global-refresh-protection"
 
 export const metadata: Metadata = {
   title: "Online Assessment System",
@@ -29,10 +31,13 @@ html {
         `}</style>
       </head>
       <body>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <GlobalRefreshProtection />
+            {children}
+            <Toaster />
+          </AuthProvider>
+        </ErrorBoundary>
       </body>
     </html>
   )

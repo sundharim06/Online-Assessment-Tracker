@@ -92,12 +92,30 @@ export async function POST(request: NextRequest) {
     const percentage = totalPossibleMarks > 0 ? Math.round((totalScore / totalPossibleMarks) * 100) : 0
 
     if (studentEmail) {
-      await updateStudentScore(studentEmail, {
-        score: totalScore,
-        totalQuestions,
-        percentage: `${percentage}%`,
-        status: "Completed",
-      })
+      try {
+        console.log("[v0] Attempting to update student score for:", studentEmail)
+        console.log("[v0] Score data:", {
+          score: totalScore,
+          totalQuestions,
+          percentage: `${percentage}%`,
+          status: "Completed",
+        })
+
+        await updateStudentScore(studentEmail, {
+          score: totalScore,
+          totalQuestions,
+          percentage: `${percentage}%`,
+          status: "Completed",
+        })
+
+        console.log("[v0] Successfully updated student score in Google Sheets")
+      } catch (sheetError) {
+        console.error("[v0] Failed to update Google Sheets:", sheetError)
+        // Continue with response even if sheet update fails
+        console.log("[v0] Continuing with response despite sheet update failure")
+      }
+    } else {
+      console.error("[v0] No student email provided, cannot update Google Sheets")
     }
 
     console.log("[v0] Assessment submitted and score updated in Google Sheets")

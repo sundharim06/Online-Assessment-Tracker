@@ -22,6 +22,28 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Disable all console methods globally
+              console.log = function() {};
+              console.warn = function() {};
+              console.error = function() {};
+              console.debug = function() {};
+              console.info = function() {};
+              console.trace = function() {};
+              console.table = function() {};
+              console.group = function() {};
+              console.groupEnd = function() {};
+              console.groupCollapsed = function() {};
+              console.time = function() {};
+              console.timeEnd = function() {};
+              console.count = function() {};
+              console.countReset = function() {};
+              console.clear = function() {};
+            `,
+          }}
+        />
         <style>{`
 html {
   font-family: ${GeistSans.style.fontFamily};

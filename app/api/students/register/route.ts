@@ -47,14 +47,6 @@ export async function POST(request: NextRequest) {
       profileImage: session.user.image || "",
     })
 
-    console.log("[v0] Student registered and added to results sheet:", {
-      name,
-      rollNumber,
-      section,
-      department,
-      email: session.user.email,
-    })
-
     return NextResponse.json({
       success: true,
       studentId: rollNumber,
@@ -66,7 +58,6 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[v0] Registration error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

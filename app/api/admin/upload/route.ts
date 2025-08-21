@@ -38,8 +38,6 @@ export async function POST(request: NextRequest) {
 
       await writeQuestionsToExcel(questions)
 
-      console.log(`[v0] Questions Excel uploaded and processed: ${questions.length} questions`)
-
       return NextResponse.json({
         success: true,
         message: `Questions Excel uploaded successfully. ${questions.length} questions processed.`,
@@ -50,7 +48,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Invalid upload type" }, { status: 400 })
   } catch (error) {
-    console.error("[v0] Upload error:", error)
     return NextResponse.json({ error: "Failed to process Excel file" }, { status: 500 })
   }
 }

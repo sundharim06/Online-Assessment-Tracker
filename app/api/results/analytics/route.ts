@@ -40,7 +40,6 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("[v0] Analytics error:", error)
     return NextResponse.json({ error: "Failed to generate analytics" }, { status: 500 })
   }
 }

@@ -62,7 +62,6 @@ export async function readQuestionsFromExcel(): Promise<QuestionRow[]> {
       mark: Number(row["Mark"] || row["mark"] || 1),
     }))
   } catch (error) {
-    console.error("[v0] Error reading questions from Excel:", error)
     return []
   }
 }
@@ -90,7 +89,6 @@ export async function writeQuestionsToExcel(questions: QuestionRow[]) {
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" })
     await writeFile(QUESTIONS_FILE, buffer)
   } catch (error) {
-    console.error("[v0] Error writing questions to Excel:", error)
     throw error
   }
 }
@@ -116,7 +114,6 @@ export async function readStudentsFromExcel() {
       createdAt: row["Created At"] || row["createdAt"] || new Date().toISOString(),
     }))
   } catch (error) {
-    console.error("[v0] Error reading students from Excel:", error)
     return []
   }
 }
@@ -146,7 +143,6 @@ export async function writeStudentToExcel(student: any) {
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" })
     await writeFile(STUDENTS_FILE, buffer)
   } catch (error) {
-    console.error("[v0] Error writing student to Excel:", error)
     throw error
   }
 }
@@ -175,7 +171,6 @@ export async function readResultsFromExcel(): Promise<StudentResultRow[]> {
       submittedAt: row["Submitted At"] || row["submittedAt"] || "",
     }))
   } catch (error) {
-    console.error("[v0] Error reading results from Excel:", error)
     return []
   }
 }
@@ -212,7 +207,6 @@ export async function writeResultToExcel(result: StudentResultRow) {
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" })
     await writeFile(RESULTS_FILE, buffer)
   } catch (error) {
-    console.error("[v0] Error writing result to Excel:", error)
     throw error
   }
 }
@@ -244,5 +238,4 @@ export async function generateSampleFiles() {
   ]
 
   await writeQuestionsToExcel(sampleQuestions)
-  console.log("[v0] Sample questions file created at:", QUESTIONS_FILE)
 }

@@ -39,7 +39,6 @@ export default function HomePage() {
             setRegistrationStatus("error")
           }
         } catch (error) {
-          console.error("[v0] Registration check error:", error)
           setRegistrationStatus("error")
         }
       }

@@ -9,6 +9,9 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Clock, ChevronRight, CheckCircle, AlertCircle, Play, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { ProtectedWindow } from "@/components/protected-window"
+import { KeyboardBlocker } from "@/components/keyboard-blocker"
+import { FullscreenController } from "@/components/fullscreen-controller"
 import type { Question, ExamConfig } from "@/lib/google-sheets"
 
 interface StudentAnswer {
@@ -30,13 +33,50 @@ export function AssessmentInterface() {
   const [examStarted, setExamStarted] = useState(false)
   const [examStartTime, setExamStartTime] = useState<Date | null>(null)
   const [isRefreshDetected, setIsRefreshDetected] = useState(false)
+  const [isProtectedMode, setIsProtectedMode] = useState(false) // Added protected mode state management
+  const [securityViolations, setSecurityViolations] = useState<string[]>([])
+  const [violationCount, setViolationCount] = useState(0)
   const router = useRouter()
   const { toast } = useToast()
+
+  const handleSecurityViolation = useCallback(
+    (violation: string, details?: string) => {
+      // Added security violation handler
+      const violationMessage = details ? `${violation}: ${details}` : violation
+      setSecurityViolations((prev) => [...prev, violationMessage])
+      setViolationCount((prev) => prev + 1)
+
+      toast({
+        title: "Security Violation",
+        description: violationMessage,
+        variant: "destructive",
+      })
+
+      if (violationCount >= 4) {
+        // Auto-terminate exam after 5 violations
+        toast({
+          title: "Exam Terminated",
+          description: "Too many security violations detected. Your exam has been terminated.",
+          variant: "destructive",
+        })
+
+        sessionStorage.setItem("examTerminated", "security_violations")
+        sessionStorage.removeItem("examInProgress")
+        sessionStorage.removeItem("examStarted")
+
+        setTimeout(() => {
+          signOut({ callbackUrl: "/auth/signin" })
+        }, 3000)
+      }
+    },
+    [violationCount, toast],
+  )
 
   const handleSubmit = useCallback(async () => {
     if (!studentInfo) return
 
     setIsSubmitting(true)
+    setIsProtectedMode(false) // Exit protected mode before submission
     sessionStorage.removeItem("examInProgress")
     sessionStorage.removeItem("examStarted")
 
@@ -58,21 +98,6 @@ export function AssessmentInterface() {
 
       const result = await response.json()
 
-      console.log("[v0] Assessment submission result:", result)
-
-      if (result.sheetUpdated === false) {
-        console.error("[v0] Google Sheets update failed:", result.sheetError)
-        alert(
-          `⚠️ IMPORTANT: Your exam was submitted successfully, but there was an issue updating the results sheet.\n\nError: ${result.sheetError}\n\nPlease contact your administrator immediately and mention this error.`,
-        )
-      } else if (result.sheetUpdated === true) {
-        console.log("[v0] Google Sheets updated successfully")
-        toast({
-          title: "Success",
-          description: "Assessment submitted and results saved successfully!",
-        })
-      }
-
       if (response.ok) {
         sessionStorage.setItem("assessmentResult", JSON.stringify(result))
         router.push("/results")
@@ -84,7 +109,6 @@ export function AssessmentInterface() {
         })
       }
     } catch (error) {
-      console.error("[v0] Assessment submission error:", error)
       toast({
         title: "Error",
         description: "Failed to submit assessment. Please try again.",
@@ -102,18 +126,12 @@ export function AssessmentInterface() {
     const navigationEntries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[]
     const isRefresh = navigationEntries.length > 0 && navigationEntries[0].type === "reload"
 
-    console.log("[v0] Navigation type:", navigationEntries[0]?.type)
-    console.log("[v0] Exam in progress:", examInProgress)
-    console.log("[v0] Exam started flag:", examStartFlag)
-
     if (isRefresh && (examInProgress === "true" || examStartFlag === "true")) {
-      console.log("[v0] Page refresh detected during active exam - initiating security cleanup")
       setIsRefreshDetected(true)
+      setIsProtectedMode(false) // Ensure protected mode is disabled
 
-      // Clear all session data
       sessionStorage.clear()
 
-      // Clear browser cache
       if ("caches" in window) {
         caches.keys().then((names) => {
           names.forEach((name) => {
@@ -185,7 +203,6 @@ export function AssessmentInterface() {
 
         const sessionId = `${studentId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-        console.log(`[v0] Fetching questions for session: ${sessionId}`)
         const response = await fetch(`/api/questions?sessionId=${sessionId}&t=${Date.now()}`, {
           cache: "no-store",
           headers: {
@@ -195,20 +212,12 @@ export function AssessmentInterface() {
         })
         const data = await response.json()
 
-        console.log("[v0] Full API response:", JSON.stringify(data, null, 2))
-        console.log("[v0] Session ID from response:", data.sessionId)
-        console.log("[v0] First question received:", data.questions?.[0]?.id)
-
         if (response.ok && data.questions.length > 0) {
           setQuestions(data.questions)
           setExamConfig(data.examConfig)
 
           const durationMinutes = data.examConfig?.examDurationMinutes || 60
           const durationInSeconds = durationMinutes * 60
-
-          console.log("[v0] Duration from L2 cell:", durationMinutes, "minutes")
-          console.log("[v0] Converting to seconds:", durationInSeconds, "seconds")
-          console.log("[v0] Setting timeRemaining state to:", durationInSeconds)
 
           setTimeRemaining(durationInSeconds)
 
@@ -221,7 +230,6 @@ export function AssessmentInterface() {
           })
         }
       } catch (error) {
-        console.error("[v0] Error loading assessment:", error)
         toast({
           title: "Error",
           description: "Failed to load assessment. Please try again.",
@@ -243,7 +251,6 @@ export function AssessmentInterface() {
     const timer = setTimeout(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          // Time's up - trigger submission
           toast({
             title: "Time's Up!",
             description: "Your assessment has been automatically submitted.",
@@ -386,74 +393,90 @@ export function AssessmentInterface() {
   }
 
   const startExam = () => {
-    console.log("[v0] Starting exam with duration:", examConfig?.examDurationMinutes, "minutes")
-    console.log("[v0] Current timeRemaining when starting:", timeRemaining)
+    // Enhanced exam start function with protected mode
     setExamStarted(true)
     setExamStartTime(new Date())
+    setIsProtectedMode(true)
     sessionStorage.setItem("examStarted", "true")
     toast({
-      title: "Exam Started",
+      title: "Exam Started - Protected Mode Activated",
       description: `You have ${examConfig?.examDurationMinutes} minutes to complete the assessment.`,
     })
   }
 
   if (!examStarted && !isLoading && questions.length > 0 && examConfig) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl text-blue-700">Online Assessment</CardTitle>
-            <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="bg-blue-50 p-6 rounded-lg space-y-4">
-              <h3 className="font-semibold text-lg text-blue-900">Exam Instructions</h3>
-              <div className="space-y-2 text-blue-800">
-                <p>
-                  • Total Questions: <strong>{questions.length}</strong>
-                </p>
-                <p>
-                  • Time Duration: <strong>{examConfig.examDurationMinutes} minutes</strong>
-                </p>
-                <p>• Once you move to the next question, you cannot go back to change your answer</p>
-                <p>• Make sure to answer each question before proceeding</p>
-                <p>• The exam will auto-submit when time runs out</p>
+      <ProtectedWindow enabled={false}>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl text-blue-700">Online Assessment</CardTitle>
+              <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-blue-50 p-6 rounded-lg space-y-4">
+                <h3 className="font-semibold text-lg text-blue-900">Exam Instructions</h3>
+                <div className="space-y-2 text-blue-800">
+                  <p>
+                    • Total Questions: <strong>{questions.length}</strong>
+                  </p>
+                  <p>
+                    • Time Duration: <strong>{examConfig.examDurationMinutes} minutes</strong>
+                  </p>
+                  <p>• Once you move to the next question, you cannot go back to change your answer</p>
+                  <p>• Make sure to answer each question before proceeding</p>
+                  <p>• The exam will auto-submit when time runs out</p>
+                </div>
               </div>
-            </div>
 
-            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-              <div className="flex items-center gap-2 text-red-800 mb-2">
-                <Shield className="h-5 w-5" />
-                <p className="font-medium">Security Notice</p>
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                {" "}
+                {/* Enhanced security notice with protected mode details */}
+                <div className="flex items-center gap-2 text-red-800 mb-2">
+                  <Shield className="h-5 w-5" />
+                  <p className="font-medium">Protected Exam Environment</p>
+                </div>
+                <div className="space-y-1 text-sm text-red-700">
+                  <p>
+                    • <strong>Fullscreen mode will be enforced</strong> during the exam
+                  </p>
+                  <p>
+                    • <strong>All keyboard shortcuts will be disabled</strong>
+                  </p>
+                  <p>
+                    • <strong>Right-click and text selection will be blocked</strong>
+                  </p>
+                  <p>
+                    • <strong>Window switching (Alt+Tab) will be prevented</strong>
+                  </p>
+                  <p>• Page refresh will terminate your exam session permanently</p>
+                  <p>• Multiple security violations will result in automatic termination</p>
+                </div>
               </div>
-              <div className="space-y-1 text-sm text-red-700">
-                <p>
-                  • <strong>DO NOT refresh the page</strong> during the exam
-                </p>
-                <p>
-                  • <strong>DO NOT use browser back/forward buttons</strong>
-                </p>
-                <p>• Page refresh will terminate your exam session permanently</p>
-                <p>• You cannot retake the exam after any security violation</p>
-              </div>
-            </div>
 
-            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-              <div className="flex items-center gap-2 text-yellow-800">
-                <AlertCircle className="h-5 w-5" />
-                <p className="font-medium">Important: Once you start, the timer cannot be paused!</p>
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <div className="flex items-center gap-2 text-yellow-800">
+                  <AlertCircle className="h-5 w-5" />
+                  <p className="font-medium">
+                    Important: Once you start, the timer cannot be paused and protected mode will activate!
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="text-center">
-              <Button onClick={startExam} size="lg" className="bg-green-600 hover:bg-green-700 flex items-center gap-2">
-                <Play className="h-5 w-5" />
-                Start Assessment
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              <div className="text-center">
+                <Button
+                  onClick={startExam}
+                  size="lg"
+                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                >
+                  <Play className="h-5 w-5" />
+                  Start Protected Assessment
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </ProtectedWindow>
     )
   }
 
@@ -497,206 +520,239 @@ export function AssessmentInterface() {
   const availableOptions = getAvailableOptions(currentQuestion)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b">
-        <div className="container mx-auto p-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Online Assessment</h1>
-              <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Badge
-                variant="outline"
-                className={`flex items-center gap-2 ${
-                  timeRemaining < 300
-                    ? "border-red-500 text-red-700 bg-red-50"
-                    : timeRemaining < 600
-                      ? "border-yellow-500 text-yellow-700 bg-yellow-50"
-                      : "border-green-500 text-green-700 bg-green-50"
-                }`}
-              >
-                <Clock className="h-4 w-4" />
-                {formatTime(timeRemaining)}
-              </Badge>
-              <Badge variant="secondary">
-                {getAnsweredCount()} / {questions.length} Answered
-              </Badge>
-            </div>
-          </div>
-          <Progress value={progress} className="h-2 mt-4" />
-        </div>
-      </div>
+    <ProtectedWindow
+      enabled={isProtectedMode}
+      onViolation={handleSecurityViolation}
+      onModeChange={setIsProtectedMode}
+      title="Online Assessment - Protected Mode"
+      showViolations={true}
+    >
+      <KeyboardBlocker
+        enabled={isProtectedMode}
+        onViolation={handleSecurityViolation}
+        strictMode={true}
+        allowedKeys={["Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete"]}
+      />
 
-      <div className="flex container mx-auto">
-        <div className="flex-1 p-6">
-          <Card className="mb-6">
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg">
-                  Question {currentQuestionIndex + 1} of {questions.length}
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Badge variant="outline">
-                    {currentQuestion.marks} Mark{currentQuestion.marks > 1 ? "s" : ""}
-                  </Badge>
-                  {isNATQuestion ? (
-                    <Badge variant="secondary" className="text-xs">
-                      Fill in the blank
-                    </Badge>
-                  ) : isMultipleChoice ? (
-                    <Badge variant="secondary" className="text-xs">
-                      Multiple Select
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-xs">
-                      Single Choice
-                    </Badge>
-                  )}
-                </div>
+      <FullscreenController
+        enabled={isProtectedMode}
+        onFullscreenChange={(isFullscreen) => {
+          if (isProtectedMode && !isFullscreen) {
+            handleSecurityViolation("Fullscreen mode exited", "Unauthorized exit from fullscreen")
+          }
+        }}
+        onViolation={handleSecurityViolation}
+        autoEnter={true}
+        preventExit={true}
+        showControls={false}
+      />
+
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="container mx-auto p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Online Assessment</h1>
+                <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="bg-gray-50 p-6 rounded-lg">
-                <div className="text-lg leading-relaxed space-y-2">
-                  <p className="font-semibold text-gray-900">
-                    {currentQuestionIndex + 1}. {currentQuestion.question}
-                  </p>
-                  {!isNATQuestion && (
+              <div className="flex items-center gap-4">
+                <Badge
+                  variant="outline"
+                  className={`flex items-center gap-2 ${
+                    timeRemaining < 300
+                      ? "border-red-500 text-red-700 bg-red-50"
+                      : timeRemaining < 600
+                        ? "border-yellow-500 text-yellow-700 bg-yellow-50"
+                        : "border-green-500 text-green-700 bg-green-50"
+                  }`}
+                >
+                  <Clock className="h-4 w-4" />
+                  {formatTime(timeRemaining)}
+                </Badge>
+                <Badge variant="secondary">
+                  {getAnsweredCount()} / {questions.length} Answered
+                </Badge>
+                {violationCount > 0 && ( // Added security violation counter
+                  <Badge variant="destructive">
+                    {violationCount} Violation{violationCount !== 1 ? "s" : ""}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <Progress value={progress} className="h-2 mt-4" />
+          </div>
+        </div>
+
+        <div className="flex container mx-auto">
+          <div className="flex-1 p-6">
+            <Card className="mb-6">
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-lg">
+                    Question {currentQuestionIndex + 1} of {questions.length}
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Badge variant="outline">
+                      {currentQuestion.marks} Mark{currentQuestion.marks > 1 ? "s" : ""}
+                    </Badge>
+                    {isNATQuestion ? (
+                      <Badge variant="secondary" className="text-xs">
+                        Fill in the blank
+                      </Badge>
+                    ) : isMultipleChoice ? (
+                      <Badge variant="secondary" className="text-xs">
+                        Multiple Select
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">
+                        Single Choice
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="bg-gray-50 p-6 rounded-lg">
+                  <div className="text-lg leading-relaxed space-y-2">
+                    <p className="font-semibold text-gray-900">
+                      {currentQuestionIndex + 1}. {currentQuestion.question}
+                    </p>
+                    {!isNATQuestion && (
+                      <>
+                        {availableOptions.map((option) => (
+                          <p key={option.key} className="ml-4">
+                            {option.key}) {option.text}
+                          </p>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {isNATQuestion ? (
+                  <div className="space-y-4">
+                    <label className="block text-sm font-medium text-gray-700">Your Answer:</label>
+                    <input
+                      type="text"
+                      value={currentAnswer?.textAnswer || ""}
+                      onChange={(e) => handleTextAnswerChange(e.target.value)}
+                      placeholder="Type your answer here..."
+                      className="w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {availableOptions.map((option) => {
+                      const isSelected = currentAnswer?.selectedAnswer?.includes(option.key) || false
+
+                      return (
+                        <div
+                          key={option.key}
+                          onClick={() => handleAnswerSelect(option.key)}
+                          className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 ${
+                            isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
+                          }`}
+                        >
+                          <div className="flex items-center">
+                            {isMultipleChoice ? (
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                            ) : (
+                              <input
+                                type="radio"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
+                              />
+                            )}
+                          </div>
+                          <span className="font-medium text-gray-900 text-lg">{option.key}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end">
+              {currentQuestionIndex === questions.length - 1 ? (
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                >
+                  {isSubmitting ? (
                     <>
-                      {availableOptions.map((option) => (
-                        <p key={option.key} className="ml-4">
-                          {option.key}) {option.text}
-                        </p>
-                      ))}
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4" />
+                      Submit Assessment
                     </>
                   )}
-                </div>
-              </div>
-
-              {isNATQuestion ? (
-                <div className="space-y-4">
-                  <label className="block text-sm font-medium text-gray-700">Your Answer:</label>
-                  <input
-                    type="text"
-                    value={currentAnswer?.textAnswer || ""}
-                    onChange={(e) => handleTextAnswerChange(e.target.value)}
-                    placeholder="Type your answer here..."
-                    className="w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+                </Button>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {availableOptions.map((option) => {
-                    const isSelected = currentAnswer?.selectedAnswer?.includes(option.key) || false
-
-                    return (
-                      <div
-                        key={option.key}
-                        onClick={() => handleAnswerSelect(option.key)}
-                        className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all hover:bg-blue-50 ${
-                          isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
-                        }`}
-                      >
-                        <div className="flex items-center">
-                          {isMultipleChoice ? (
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                          ) : (
-                            <input
-                              type="radio"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
-                            />
-                          )}
-                        </div>
-                        <span className="font-medium text-gray-900 text-lg">{option.key}</span>
-                      </div>
-                    )
-                  })}
-                </div>
+                <Button
+                  onClick={handleNextQuestion}
+                  disabled={currentQuestionIndex === questions.length - 1}
+                  className="flex items-center gap-2"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               )}
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end">
-            {currentQuestionIndex === questions.length - 1 ? (
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4" />
-                    Submit Assessment
-                  </>
-                )}
-              </Button>
-            ) : (
-              <Button
-                onClick={handleNextQuestion}
-                disabled={currentQuestionIndex === questions.length - 1}
-                className="flex items-center gap-2"
-              >
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            )}
+            </div>
           </div>
-        </div>
 
-        <div className="w-80 bg-white shadow-sm border-l min-h-screen">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold text-gray-900">Question Navigation</h3>
-            <p className="text-xs text-gray-500 mt-1">Answered questions are locked and cannot be changed</p>
-          </div>
-          <div className="p-4 h-[calc(100vh-120px)] overflow-y-auto">
-            <div className="grid grid-cols-5 gap-2">
-              {questions.map((_, index) => {
-                const hasAnswer =
-                  (answers[index]?.selectedAnswer && answers[index].selectedAnswer.length > 0) ||
-                  (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
+          <div className="w-80 bg-white shadow-sm border-l min-h-screen">
+            <div className="p-4 border-b">
+              <h3 className="font-semibold text-gray-900">Question Navigation</h3>
+              <p className="text-xs text-gray-500 mt-1">Answered questions are locked and cannot be changed</p>
+            </div>
+            <div className="p-4 h-[calc(100vh-120px)] overflow-y-auto">
+              <div className="grid grid-cols-5 gap-2">
+                {questions.map((_, index) => {
+                  const hasAnswer =
+                    (answers[index]?.selectedAnswer && answers[index].selectedAnswer.length > 0) ||
+                    (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
 
-                const isLocked = answeredQuestions.has(index)
-                const canNavigate = index <= currentQuestionIndex && !isLocked
+                  const isLocked = answeredQuestions.has(index)
+                  const canNavigate = index <= currentQuestionIndex && !isLocked
 
-                return (
-                  <button
-                    key={index}
-                    onClick={() => (canNavigate ? setCurrentQuestionIndex(index) : null)}
-                    disabled={!canNavigate}
-                    className={`w-12 h-12 rounded-lg text-sm font-medium transition-all ${
-                      index === currentQuestionIndex
-                        ? "bg-blue-600 text-white shadow-lg"
-                        : isLocked
-                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : hasAnswer
-                            ? "bg-green-100 text-green-700 border border-green-300 hover:bg-green-200"
-                            : index < currentQuestionIndex
-                              ? "bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200"
-                              : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    }`}
-                    title={isLocked ? "Question locked - cannot be changed" : `Question ${index + 1}`}
-                  >
-                    {index + 1}
-                  </button>
-                )
-              })}
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => (canNavigate ? setCurrentQuestionIndex(index) : null)}
+                      disabled={!canNavigate}
+                      className={`w-12 h-12 rounded-lg text-sm font-medium transition-all ${
+                        index === currentQuestionIndex
+                          ? "bg-blue-600 text-white shadow-lg"
+                          : isLocked
+                            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            : hasAnswer
+                              ? "bg-green-100 text-green-700 border border-green-300 hover:bg-green-200"
+                              : index < currentQuestionIndex
+                                ? "bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200"
+                                : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      }`}
+                      title={isLocked ? "Question locked - cannot be changed" : `Question ${index + 1}`}
+                    >
+                      {index + 1}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </ProtectedWindow>
   )
 }

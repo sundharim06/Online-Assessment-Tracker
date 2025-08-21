@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { signOut } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,7 +33,69 @@ export function AssessmentInterface() {
   const router = useRouter()
   const { toast } = useToast()
 
-  const detectRefreshAndCleanup = () => {
+  const handleSubmit = useCallback(async () => {
+    if (!studentInfo) return
+
+    setIsSubmitting(true)
+    sessionStorage.removeItem("examInProgress")
+    sessionStorage.removeItem("examStarted")
+
+    try {
+      const response = await fetch("/api/assessment/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          studentId: Number.parseInt(studentInfo.id),
+          answers: answers,
+          studentName: studentInfo.name,
+          studentSection: sessionStorage.getItem("studentSection") || "Unknown",
+          studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
+          studentEmail: sessionStorage.getItem("studentEmail") || "",
+        }),
+      })
+
+      const result = await response.json()
+
+      console.log("[v0] Assessment submission result:", result)
+
+      if (result.sheetUpdated === false) {
+        console.error("[v0] Google Sheets update failed:", result.sheetError)
+        alert(
+          `⚠️ IMPORTANT: Your exam was submitted successfully, but there was an issue updating the results sheet.\n\nError: ${result.sheetError}\n\nPlease contact your administrator immediately and mention this error.`,
+        )
+      } else if (result.sheetUpdated === true) {
+        console.log("[v0] Google Sheets updated successfully")
+        toast({
+          title: "Success",
+          description: "Assessment submitted and results saved successfully!",
+        })
+      }
+
+      if (response.ok) {
+        sessionStorage.setItem("assessmentResult", JSON.stringify(result))
+        router.push("/results")
+      } else {
+        toast({
+          title: "Submission Failed",
+          description: result.error || "Please try again",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Assessment submission error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to submit assessment. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [studentInfo, answers, router, toast])
+
+  useEffect(() => {
     const examInProgress = sessionStorage.getItem("examInProgress")
     const examStartFlag = sessionStorage.getItem("examStarted")
 
@@ -48,18 +110,10 @@ export function AssessmentInterface() {
       console.log("[v0] Page refresh detected during active exam - initiating security cleanup")
       setIsRefreshDetected(true)
 
-      sessionStorage.removeItem("studentId")
-      sessionStorage.removeItem("studentName")
-      sessionStorage.removeItem("studentSection")
-      sessionStorage.removeItem("studentDepartment")
-      sessionStorage.removeItem("studentEmail")
-      sessionStorage.removeItem("studentPhone")
-      sessionStorage.removeItem("registrationComplete")
-      sessionStorage.removeItem("examInProgress")
-      sessionStorage.removeItem("examStarted")
-      sessionStorage.removeItem("assessmentResult")
-      sessionStorage.removeItem("reviewData")
+      // Clear all session data
+      sessionStorage.clear()
 
+      // Clear browser cache
       if ("caches" in window) {
         caches.keys().then((names) => {
           names.forEach((name) => {
@@ -74,40 +128,29 @@ export function AssessmentInterface() {
           redirect: true,
         })
       }, 3000)
-
-      return true
-    }
-
-    return false
-  }
-
-  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-    if (examStarted && !isSubmitting) {
-      e.preventDefault()
-      e.returnValue = "Are you sure you want to leave? Your exam progress will be lost."
-      return "Are you sure you want to leave? Your exam progress will be lost."
-    }
-  }
-
-  const handleUnload = () => {
-    const navigationEntries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[]
-    const isRefresh = navigationEntries.length > 0 && navigationEntries[0].type === "reload"
-
-    if (!isRefresh) {
-      sessionStorage.removeItem("examInProgress")
-    }
-  }
-
-  useEffect(() => {
-    const refreshDetected = detectRefreshAndCleanup()
-    if (refreshDetected) return
-
-    if (!isRefreshDetected) {
+    } else if (!isRefresh) {
       sessionStorage.setItem("examInProgress", "true")
     }
   }, [])
 
   useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (examStarted && !isSubmitting) {
+        e.preventDefault()
+        e.returnValue = "Are you sure you want to leave? Your exam progress will be lost."
+        return "Are you sure you want to leave? Your exam progress will be lost."
+      }
+    }
+
+    const handleUnload = () => {
+      const navigationEntries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[]
+      const isRefresh = navigationEntries.length > 0 && navigationEntries[0].type === "reload"
+
+      if (!isRefresh) {
+        sessionStorage.removeItem("examInProgress")
+      }
+    }
+
     window.addEventListener("beforeunload", handleBeforeUnload)
     window.addEventListener("unload", handleUnload)
 
@@ -121,6 +164,8 @@ export function AssessmentInterface() {
   }, [examStarted, isSubmitting, isRefreshDetected])
 
   useEffect(() => {
+    if (isRefreshDetected) return
+
     const loadAssessment = async () => {
       try {
         const studentId = sessionStorage.getItem("studentId")
@@ -167,10 +212,6 @@ export function AssessmentInterface() {
 
           setTimeRemaining(durationInSeconds)
 
-          setTimeout(() => {
-            console.log("[v0] Timer state after setting:", timeRemaining)
-          }, 100)
-
           setAnswers(data.questions.map((q: Question) => ({ questionId: q.id, selectedAnswer: [], textAnswer: "" })))
         } else {
           toast({
@@ -191,24 +232,32 @@ export function AssessmentInterface() {
       }
     }
 
-    if (!isRefreshDetected) {
-      loadAssessment()
-    }
+    loadAssessment()
   }, [router, toast, isRefreshDetected])
 
   useEffect(() => {
-    if (timeRemaining > 0 && examStarted && questions.length > 0) {
-      const timer = setTimeout(() => setTimeRemaining(timeRemaining - 1), 1000)
-      return () => clearTimeout(timer)
-    } else if (timeRemaining === 0 && examStarted) {
-      toast({
-        title: "Time's Up!",
-        description: "Your assessment has been automatically submitted.",
-        variant: "destructive",
-      })
-      handleSubmit()
+    if (!examStarted || timeRemaining <= 0 || questions.length === 0) {
+      return
     }
-  }, [timeRemaining, examStarted, questions.length])
+
+    const timer = setTimeout(() => {
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          // Time's up - trigger submission
+          toast({
+            title: "Time's Up!",
+            description: "Your assessment has been automatically submitted.",
+            variant: "destructive",
+          })
+          handleSubmit()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [timeRemaining, examStarted, questions.length, handleSubmit, toast])
 
   if (isRefreshDetected) {
     return (
@@ -338,51 +387,6 @@ export function AssessmentInterface() {
 
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
-    }
-  }
-
-  const handleSubmit = async () => {
-    if (!studentInfo) return
-
-    setIsSubmitting(true)
-    sessionStorage.removeItem("examInProgress")
-    sessionStorage.removeItem("examStarted")
-
-    try {
-      const response = await fetch("/api/assessment/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          studentId: Number.parseInt(studentInfo.id),
-          answers: answers,
-          studentName: studentInfo.name,
-          studentSection: sessionStorage.getItem("studentSection") || "Unknown",
-          studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
-        }),
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        sessionStorage.setItem("assessmentResult", JSON.stringify(result))
-        router.push("/results")
-      } else {
-        toast({
-          title: "Submission Failed",
-          description: result.error || "Please try again",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to submit assessment. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsSubmitting(false)
     }
   }
 

@@ -8,13 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, User, Phone, Hash, Building, GraduationCap, Mail } from "lucide-react"
+import { Loader2, User, Hash, Building, GraduationCap, Mail } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface FormData {
   name: string
   rollNumber: string
-  phoneNumber: string
   section: string
   department: string
 }
@@ -24,7 +23,6 @@ export function StudentRegistrationForm() {
   const [formData, setFormData] = useState<FormData>({
     name: session?.user?.name || "",
     rollNumber: "",
-    phoneNumber: "",
     section: "",
     department: "",
   })

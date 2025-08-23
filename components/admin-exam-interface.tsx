@@ -218,14 +218,15 @@ export function AdminExamInterface() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          studentId: 999999, // Special admin ID
+          studentId: `ADMIN_${Date.now()}`, // Unique admin ID
           answers: answers,
           lockedQuestionIds: questions.map((q) => q.id), // All questions considered locked for admin
           studentName: "Administrator",
-          studentSection: "Admin",
+          studentSection: "ADMIN",
           studentDepartment: "Administration",
-          studentEmail: "admin@system.com",
+          studentEmail: "admin@exam.system",
           status: "completed",
+          examType: "admin", // Mark as admin exam
         }),
       })
 
@@ -269,6 +270,8 @@ export function AdminExamInterface() {
 
         // Redirect to results page
         router.push("/results")
+      } else {
+        throw new Error(result.message || "Failed to submit exam")
       }
     } catch (error) {
       console.error("[v0] Error submitting admin exam:", error)

@@ -397,7 +397,6 @@ export function AssessmentInterface() {
 
   useEffect(() => {
     if (isProtectedMode) {
-      // Block console access in protected mode
       const originalConsole = { ...console }
 
       // Override console methods to block them
@@ -812,6 +811,8 @@ export function AssessmentInterface() {
         autoEnter={false}
         preventExit={true}
         showControls={false}
+        violationLimit={3}
+        onTerminate={() => submitTerminatedExam("security_violation")}
       />
 
       <div className="min-h-screen bg-gray-50">

@@ -4,7 +4,7 @@ import { fetchQuestions, updateStudentScore } from "@/lib/google-sheets"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { studentId, answers, lockedQuestionIds, status, terminationReason, tabSwitchCount } = body
+    const { studentId, answers, lockedQuestionIds, status, terminationReason, tabSwitchCount, examType } = body
 
     if (!studentId || !answers || !Array.isArray(answers)) {
       return NextResponse.json({ error: "Invalid submission data" }, { status: 400 })
@@ -99,16 +99,24 @@ export async function POST(request: NextRequest) {
     const percentage =
       totalPossibleMarksForEntireExam > 0 ? Math.round((totalScore / totalPossibleMarksForEntireExam) * 100) : 0
 
-    const examStatus =
-      status === "terminated"
-        ? terminationReason === "cheated"
+    let examStatus = ""
+    if (examType === "admin") {
+      examStatus = "ADMIN EXAM - COMPLETED"
+    } else if (status === "terminated") {
+      examStatus =
+        terminationReason === "cheated"
           ? "TERMINATED - CHEATED"
           : terminationReason === "security_violation"
             ? "TERMINATED - SECURITY VIOLATION"
             : "TERMINATED"
-        : "COMPLETED"
+    } else {
+      examStatus = "COMPLETED"
+    }
 
-    if (studentEmail) {
+    const shouldUpdateSheet =
+      examType !== "admin" || (examType === "admin" && studentEmail && studentEmail !== "admin@exam.system")
+
+    if (studentEmail && shouldUpdateSheet) {
       try {
         await updateStudentScore(studentEmail, {
           score: totalScore,
@@ -121,6 +129,10 @@ export async function POST(request: NextRequest) {
             answeredQuestions: totalQuestions,
             totalAvailableQuestions: questions.length,
             partialCompletion: `${totalQuestions}/${questions.length} questions answered`,
+          }),
+          ...(examType === "admin" && {
+            examType: "ADMIN",
+            adminNote: "Admin test exam - not counted in student records",
           }),
         })
 
@@ -146,6 +158,7 @@ export async function POST(request: NextRequest) {
               lockedQuestionIdsSet.size > 0
                 ? "Only locked questions were evaluated"
                 : "All submitted questions were evaluated",
+            isAdminExam: examType === "admin",
           },
         })
       } catch (sheetError) {
@@ -172,6 +185,7 @@ export async function POST(request: NextRequest) {
               lockedQuestionIdsSet.size > 0
                 ? "Only locked questions were evaluated"
                 : "All submitted questions were evaluated",
+            isAdminExam: examType === "admin",
           },
         })
       }
@@ -179,7 +193,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         sheetUpdated: false,
-        sheetError: "No student email provided",
+        sheetError: examType === "admin" ? "Admin exam - sheet update skipped" : "No student email provided",
         result: {
           totalScore,
           totalMarks: totalPossibleMarksForEntireExam,
@@ -199,6 +213,7 @@ export async function POST(request: NextRequest) {
             lockedQuestionIdsSet.size > 0
               ? "Only locked questions were evaluated"
               : "All submitted questions were evaluated",
+          isAdminExam: examType === "admin",
         },
       })
     }

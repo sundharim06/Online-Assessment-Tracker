@@ -8,10 +8,12 @@ import { Maximize, Minimize, AlertTriangle, Monitor } from "lucide-react"
 interface FullscreenControllerProps {
   enabled: boolean
   onFullscreenChange?: (isFullscreen: boolean) => void
-  onViolation?: (violation: string) => void
+  onViolation?: (violation: string, reason: string) => void
   autoEnter?: boolean
   preventExit?: boolean
   showControls?: boolean
+  violationLimit?: number
+  onTerminate?: () => void
 }
 
 export function FullscreenController({
@@ -21,6 +23,8 @@ export function FullscreenController({
   autoEnter = false,
   preventExit = false,
   showControls = true,
+  violationLimit = 3,
+  onTerminate,
 }: FullscreenControllerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isSupported, setIsSupported] = useState(false)
@@ -52,21 +56,33 @@ export function FullscreenController({
 
     // If user exits fullscreen while protection is enabled
     if (!newIsFullscreen && enabled && preventExit) {
-      setExitAttempts((prev) => prev + 1)
-      setShowExitWarning(true)
-      onViolation?.(`Fullscreen exit attempt ${exitAttempts + 1}`)
+      const newAttempts = exitAttempts + 1
+      setExitAttempts(newAttempts)
 
+      if (newAttempts >= violationLimit) {
+        onViolation?.(
+          `Fullscreen exit violation limit exceeded (${newAttempts}/${violationLimit})`,
+          "security_violation",
+        )
+        onTerminate?.()
+        return
+      }
+
+      setShowExitWarning(true)
+      onViolation?.(`Fullscreen exit attempt ${newAttempts}`, "fullscreen_violation")
+
+      // Faster re-entry to fullscreen
       setTimeout(() => {
         enterFullscreen()
         setShowExitWarning(false)
-      }, 500)
+      }, 200)
     }
-  }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts])
+  }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts, violationLimit, onTerminate])
 
   // Enter fullscreen mode
   const enterFullscreen = useCallback(async () => {
     if (!isSupported) {
-      onViolation?.("Fullscreen not supported on this browser")
+      onViolation?.("Fullscreen not supported on this browser", "browser_incompatible")
       return false
     }
 
@@ -85,7 +101,7 @@ export function FullscreenController({
 
       return true
     } catch (error) {
-      onViolation?.("Failed to enter fullscreen mode")
+      onViolation?.("Failed to enter fullscreen mode", "fullscreen_error")
       return false
     }
   }, [isSupported, onViolation])
@@ -107,7 +123,7 @@ export function FullscreenController({
 
       return true
     } catch (error) {
-      onViolation?.("Failed to exit fullscreen mode")
+      onViolation?.("Failed to exit fullscreen mode", "fullscreen_error")
       return false
     }
   }, [isFullscreen, onViolation])
@@ -120,24 +136,41 @@ export function FullscreenController({
         event.stopPropagation()
         event.stopImmediatePropagation()
 
-        setExitAttempts((prev) => prev + 1)
-        onViolation?.(`Escape key violation - Attempt ${exitAttempts + 1}`)
+        const newAttempts = exitAttempts + 1
+        setExitAttempts(newAttempts)
 
+        if (newAttempts >= violationLimit) {
+          onViolation?.(`Escape key violation limit exceeded (${newAttempts}/${violationLimit})`, "security_violation")
+          onTerminate?.()
+          return
+        }
+
+        onViolation?.(`Escape key violation - Attempt ${newAttempts}`, "escape_key_violation")
+
+        // Faster re-entry to fullscreen
         setTimeout(() => {
           enterFullscreen()
-        }, 100)
+        }, 50)
       }
     },
-    [isFullscreen, preventExit, onViolation, enterFullscreen, exitAttempts],
+    [isFullscreen, preventExit, onViolation, enterFullscreen, exitAttempts, violationLimit, onTerminate],
   )
 
   // Monitor window focus to detect Alt+Tab attempts
   const handleVisibilityChange = useCallback(() => {
     if (enabled && preventExit && document.hidden && isFullscreen) {
-      onViolation?.("Window focus lost - potential Alt+Tab attempt")
-      setExitAttempts((prev) => prev + 1)
+      const newAttempts = exitAttempts + 1
+      setExitAttempts(newAttempts)
+
+      if (newAttempts >= violationLimit) {
+        onViolation?.(`Focus loss violation limit exceeded (${newAttempts}/${violationLimit})`, "security_violation")
+        onTerminate?.()
+        return
+      }
+
+      onViolation?.("Window focus lost - potential Alt+Tab attempt", "focus_loss_violation")
     }
-  }, [enabled, preventExit, isFullscreen, onViolation])
+  }, [enabled, preventExit, isFullscreen, onViolation, exitAttempts, violationLimit, onTerminate])
 
   // Set up event listeners
   useEffect(() => {
@@ -204,9 +237,13 @@ export function FullscreenController({
               </p>
               <div className="bg-red-50 p-3 rounded border border-red-200">
                 <p className="text-sm text-red-600">
-                  <strong>Exit Attempts:</strong> {exitAttempts}
+                  <strong>Exit Attempts:</strong> {exitAttempts}/{violationLimit}
                 </p>
-                <p className="text-sm text-red-600">Returning to fullscreen mode automatically...</p>
+                <p className="text-sm text-red-600">
+                  {exitAttempts >= violationLimit
+                    ? "Exam will be terminated!"
+                    : "Returning to fullscreen mode automatically..."}
+                </p>
               </div>
             </div>
           </div>
@@ -258,7 +295,8 @@ export function FullscreenController({
             <strong>Fullscreen Required:</strong> Please enter fullscreen mode for the secure exam environment.
             {exitAttempts > 0 && (
               <span className="block mt-1 text-sm">
-                Exit attempts detected: {exitAttempts}. Continued violations may result in exam termination.
+                Exit attempts detected: {exitAttempts}/{violationLimit}. Continued violations may result in exam
+                termination.
               </span>
             )}
           </AlertDescription>

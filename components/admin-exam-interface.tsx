@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -17,6 +18,7 @@ interface StudentAnswer {
 }
 
 export function AdminExamInterface() {
+  const { data: session } = useSession()
   const [questions, setQuestions] = useState<Question[]>([])
   const [examConfig, setExamConfig] = useState<ExamConfig | null>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
@@ -35,9 +37,12 @@ export function AdminExamInterface() {
     const originalConsole = { ...console }
     Object.assign(console, originalConsole)
 
-    setStudentInfo({ id: "admin", name: "Administrator" })
+    setStudentInfo({
+      id: session?.user?.id || "admin",
+      name: session?.user?.name || "Administrator",
+    })
     loadQuestions()
-  }, [])
+  }, [session])
 
   useEffect(() => {
     let timer: NodeJS.Timeout
@@ -78,10 +83,15 @@ export function AdminExamInterface() {
           ].filter((opt) => opt.text && opt.text.trim() !== "")
 
           const correctAnswerText = (() => {
-            if (q.questionType === "NAT") {
-              return q.correctAnswer || "No correct answer provided"
+            if (!q.correctAnswer || q.correctAnswer.trim() === "") {
+              return "No correct answer provided"
             }
-            if (q.correctAnswer && q.correctAnswer.includes(",")) {
+
+            if (q.questionType === "NAT") {
+              return q.correctAnswer
+            }
+
+            if (q.correctAnswer.includes(",")) {
               const correctKeys = q.correctAnswer.split(",").map((k) => k.trim())
               const correctTexts = correctKeys.map((key) => {
                 const option = options.find((opt) => opt.key === key)
@@ -89,10 +99,9 @@ export function AdminExamInterface() {
               })
               return correctTexts.join(", ")
             }
+
             const matchingOption = options.find((opt) => opt.key === q.correctAnswer)
-            return matchingOption
-              ? `${q.correctAnswer}: ${matchingOption.text}`
-              : q.correctAnswer || "No correct answer provided"
+            return matchingOption ? `${q.correctAnswer}: ${matchingOption.text}` : q.correctAnswer
           })()
 
           console.log(`Question ${index + 1}:`, {
@@ -236,13 +245,13 @@ export function AdminExamInterface() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          studentId: `ADMIN_${Date.now()}`,
+          studentId: session?.user?.id || `ADMIN_${Date.now()}`,
           answers: answers,
           lockedQuestionIds: Array.from(answeredQuestions).map((index) => questions[index].id),
-          studentName: "Administrator",
+          studentName: session?.user?.name || "Administrator",
           studentSection: "ADMIN",
           studentDepartment: "Administration",
-          studentEmail: "admin@exam.system",
+          studentEmail: session?.user?.email || "admin@exam.system",
           status: "completed",
           examType: "admin",
           startTime: examStartTime,

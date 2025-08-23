@@ -114,7 +114,11 @@ export async function POST(request: NextRequest) {
     }
 
     const shouldUpdateSheet =
-      examType !== "admin" || (examType === "admin" && studentEmail && studentEmail !== "admin@exam.system")
+      examType !== "admin" ||
+      (examType === "admin" &&
+        studentEmail &&
+        studentEmail !== "admin@exam.system" &&
+        studentEmail.endsWith("@citchennai.net"))
 
     if (studentEmail && shouldUpdateSheet) {
       try {
@@ -196,7 +200,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         sheetUpdated: false,
-        sheetError: examType === "admin" ? "Admin exam - sheet update skipped" : "No student email provided",
+        sheetError:
+          examType === "admin" ? "Admin exam - sheet update skipped for system admin" : "No student email provided",
         result: {
           totalScore,
           totalMarks: totalPossibleMarksForEntireExam,

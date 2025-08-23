@@ -727,9 +727,6 @@ export function AssessmentInterface() {
                 <Play className="h-5 w-5" />
                 Start Protected Assessment
               </Button>
-
-              {/* Admin Access Hint */}
-              <p className="text-xs text-gray-400 mt-2">Press Shift+Alt+Y for instructor access</p>
             </div>
           </CardContent>
         </Card>

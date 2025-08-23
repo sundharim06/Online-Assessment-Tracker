@@ -72,6 +72,9 @@ export function FullscreenController({
       onViolation?.(`Fullscreen exit attempt ${newAttempts}`, "fullscreen_violation")
 
       enterFullscreen()
+      requestAnimationFrame(() => enterFullscreen())
+      setTimeout(() => enterFullscreen(), 1)
+
       setShowExitWarning(false)
     }
   }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts, violationLimit, onTerminate])
@@ -86,20 +89,36 @@ export function FullscreenController({
     try {
       const element = document.documentElement
 
+      const promises = []
+
       if (element.requestFullscreen) {
-        await element.requestFullscreen()
-      } else if ((element as any).webkitRequestFullscreen) {
-        await (element as any).webkitRequestFullscreen()
-      } else if ((element as any).mozRequestFullScreen) {
-        await (element as any).mozRequestFullScreen()
-      } else if ((element as any).msRequestFullscreen) {
-        await (element as any).msRequestFullscreen()
+        promises.push(element.requestFullscreen({ navigationUI: "hide" }))
+      }
+      if ((element as any).webkitRequestFullscreen) {
+        promises.push((element as any).webkitRequestFullscreen())
+      }
+      if ((element as any).mozRequestFullScreen) {
+        promises.push((element as any).mozRequestFullScreen())
+      }
+      if ((element as any).msRequestFullscreen) {
+        promises.push((element as any).msRequestFullscreen())
       }
 
+      await Promise.race(promises)
       return true
     } catch (error) {
-      onViolation?.("Failed to enter fullscreen mode", "fullscreen_error")
-      return false
+      try {
+        const element = document.documentElement
+        if (element.requestFullscreen) {
+          await element.requestFullscreen()
+        } else if ((element as any).webkitRequestFullscreen) {
+          await (element as any).webkitRequestFullscreen()
+        }
+        return true
+      } catch (secondError) {
+        onViolation?.("Failed to enter fullscreen mode", "fullscreen_error")
+        return false
+      }
     }
   }, [isSupported, onViolation])
 
@@ -145,6 +164,7 @@ export function FullscreenController({
         onViolation?.(`Escape key violation - Attempt ${newAttempts}`, "escape_key_violation")
 
         enterFullscreen()
+        requestAnimationFrame(() => enterFullscreen())
       }
     },
     [isFullscreen, preventExit, onViolation, enterFullscreen, exitAttempts, violationLimit, onTerminate],
@@ -205,6 +225,26 @@ export function FullscreenController({
       exitFullscreen()
     }
   }, [enabled, isFullscreen, exitFullscreen])
+
+  // Continuous fullscreen monitoring for immediate restoration
+  useEffect(() => {
+    if (enabled && preventExit) {
+      const checkFullscreen = () => {
+        const fullscreenElement =
+          document.fullscreenElement ||
+          (document as any).webkitFullscreenElement ||
+          (document as any).mozFullScreenElement ||
+          (document as any).msFullscreenElement
+
+        if (!fullscreenElement && isFullscreen) {
+          enterFullscreen()
+        }
+      }
+
+      const interval = setInterval(checkFullscreen, 10)
+      return () => clearInterval(interval)
+    }
+  }, [enabled, preventExit, isFullscreen, enterFullscreen])
 
   if (!isSupported) {
     return (
@@ -300,7 +340,6 @@ export function FullscreenController({
       {/* Browser Compatibility Info */}
       {enabled && isSupported && (
         <style jsx global>{`
-          /* Hide browser UI in fullscreen */
           :-webkit-full-screen {
             width: 100% !important;
             height: 100% !important;
@@ -321,7 +360,6 @@ export function FullscreenController({
             height: 100% !important;
           }
           
-          /* Prevent scrolling in fullscreen */
           html:-webkit-full-screen,
           html:-moz-full-screen,
           html:-ms-fullscreen,

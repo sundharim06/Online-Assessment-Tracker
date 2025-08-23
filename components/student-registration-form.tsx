@@ -79,7 +79,6 @@ export function StudentRegistrationForm() {
         sessionStorage.setItem("studentSection", formData.section)
         sessionStorage.setItem("studentDepartment", formData.department)
         sessionStorage.setItem("studentEmail", session?.user?.email || "")
-        sessionStorage.setItem("studentPhone", formData.phoneNumber)
         sessionStorage.setItem("registrationComplete", "true")
         sessionStorage.setItem("examStarted", "true")
 
@@ -161,22 +160,6 @@ export function StudentRegistrationForm() {
           placeholder="Enter your roll number"
           value={formData.rollNumber}
           onChange={(e) => handleInputChange("rollNumber", e.target.value.toUpperCase())}
-          required
-          className="transition-all focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="phoneNumber" className="flex items-center gap-2">
-          <Phone className="h-4 w-4" />
-          Phone Number
-        </Label>
-        <Input
-          id="phoneNumber"
-          type="tel"
-          placeholder="Enter your phone number"
-          value={formData.phoneNumber}
-          onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
           required
           className="transition-all focus:ring-2 focus:ring-blue-500"
         />

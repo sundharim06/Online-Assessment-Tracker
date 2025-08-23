@@ -237,15 +237,6 @@ export function AdminExamInterface() {
   }
 
   const handleNextQuestion = () => {
-    const currentAnswer = answers.find((ans) => ans.questionId === questions[currentQuestionIndex].id)
-    const hasAnswer =
-      (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
-      (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
-
-    if (hasAnswer) {
-      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
-    }
-
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
 

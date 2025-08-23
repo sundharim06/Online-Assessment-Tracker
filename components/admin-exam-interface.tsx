@@ -170,11 +170,43 @@ export function AdminExamInterface() {
       }),
     )
 
+    const options = [
+      { key: "A", text: currentQuestion.optionA },
+      { key: "B", text: currentQuestion.optionB },
+      { key: "C", text: currentQuestion.optionC },
+      { key: "D", text: currentQuestion.optionD },
+      { key: "E", text: currentQuestion.optionE },
+      { key: "F", text: currentQuestion.optionF },
+    ].filter((opt) => opt.text && opt.text.trim() !== "")
+
+    const correctAnswerText = (() => {
+      if (!currentQuestion.correctAnswer || currentQuestion.correctAnswer.trim() === "") {
+        return "No correct answer provided"
+      }
+
+      if (currentQuestion.questionType === "NAT") {
+        return currentQuestion.correctAnswer
+      }
+
+      if (currentQuestion.correctAnswer.includes(",")) {
+        const correctKeys = currentQuestion.correctAnswer.split(",").map((k) => k.trim())
+        const correctTexts = correctKeys.map((key) => {
+          const option = options.find((opt) => opt.key === key)
+          return option ? `${key}: ${option.text}` : key
+        })
+        return correctTexts.join(", ")
+      }
+
+      const matchingOption = options.find((opt) => opt.key === currentQuestion.correctAnswer)
+      return matchingOption ? `${currentQuestion.correctAnswer}: ${matchingOption.text}` : currentQuestion.correctAnswer
+    })()
+
     console.log("[v0] ADMIN MODE: Answer Selected:", {
       questionId: currentQuestion.id,
       questionNumber: currentQuestionIndex + 1,
       selectedAnswer: optionKey,
       correctAnswer: currentQuestion.correctAnswer,
+      correctAnswerText: correctAnswerText,
       isCorrect: optionKey === currentQuestion.correctAnswer,
       questionType: currentQuestion.questionType,
       marks: currentQuestion.marks,
@@ -200,6 +232,7 @@ export function AdminExamInterface() {
       questionNumber: currentQuestionIndex + 1,
       textAnswer: value,
       correctAnswer: currentQuestion.correctAnswer,
+      correctAnswerText: currentQuestion.correctAnswer || "No correct answer provided",
       questionType: currentQuestion.questionType,
     })
   }
@@ -253,7 +286,7 @@ export function AdminExamInterface() {
           studentDepartment: "Administration",
           studentEmail: session?.user?.email || "admin@exam.system",
           status: "completed",
-          examType: "admin",
+          examType: "regular",
           startTime: examStartTime,
           endTime: new Date(),
         }),
@@ -263,6 +296,7 @@ export function AdminExamInterface() {
 
       if (response.ok) {
         const score = calculateScore()
+
         console.log("[v0] ADMIN MODE: Final Exam Results:", {
           totalScore: score,
           totalPossibleMarks: questions.reduce((sum, q) => sum + q.marks, 0),
@@ -271,10 +305,32 @@ export function AdminExamInterface() {
           detailedAnswers: questions.map((q, index) => {
             const userAnswer = answers.find((a) => a.questionId === q.id)
             const selectedAnswer = userAnswer?.selectedAnswer?.[0] || userAnswer?.textAnswer || "Not answered"
+
+            const options = [
+              { key: "A", text: q.optionA },
+              { key: "B", text: q.optionB },
+              { key: "C", text: q.optionC },
+              { key: "D", text: q.optionD },
+              { key: "E", text: q.optionE },
+              { key: "F", text: q.optionF },
+            ].filter((opt) => opt.text && opt.text.trim() !== "")
+
+            const correctAnswerText = (() => {
+              if (!q.correctAnswer || q.correctAnswer.trim() === "") {
+                return "No correct answer provided"
+              }
+              if (q.questionType === "NAT") {
+                return q.correctAnswer
+              }
+              const matchingOption = options.find((opt) => opt.key === q.correctAnswer)
+              return matchingOption ? `${q.correctAnswer}: ${matchingOption.text}` : q.correctAnswer
+            })()
+
             return {
               questionNumber: index + 1,
               question: q.question,
               correctAnswer: q.correctAnswer,
+              correctAnswerText: correctAnswerText,
               userAnswer: selectedAnswer,
               isCorrect: selectedAnswer === q.correctAnswer,
               marks: q.marks,
@@ -287,7 +343,7 @@ export function AdminExamInterface() {
           "assessmentResult",
           JSON.stringify({
             ...result,
-            isAdminExam: true,
+            isAdminExam: false,
           }),
         )
 

@@ -38,7 +38,7 @@ export function AdminDashboard() {
 
   const handleLogin = () => {
     // Simple password authentication (in production, use proper auth)
-    if (password === "admin123") {
+    if (password === "ennakuterla") {
       setIsAuthenticated(true)
       loadData()
       toast({

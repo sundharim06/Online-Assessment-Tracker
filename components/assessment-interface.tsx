@@ -420,8 +420,12 @@ export function AssessmentInterface() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!examStarted && event.ctrlKey && event.altKey && event.key === "A") {
-        event.preventDefault()
-        setShowAdminAccess(true)
+        // Check if K key is also being pressed
+        const kPressed = event.code === "KeyK" || event.key === "k" || event.key === "K"
+        if (kPressed) {
+          event.preventDefault()
+          setShowAdminAccess(true)
+        }
       }
     }
 

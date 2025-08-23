@@ -419,13 +419,9 @@ export function AssessmentInterface() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!examStarted && event.ctrlKey && event.altKey && event.key === "A") {
-        // Check if K key is also being pressed
-        const kPressed = event.code === "KeyK" || event.key === "k" || event.key === "K"
-        if (kPressed) {
-          event.preventDefault()
-          setShowAdminAccess(true)
-        }
+      if (!examStarted && event.shiftKey && event.altKey && event.key === "Y") {
+        event.preventDefault()
+        setShowAdminAccess(true)
       }
     }
 
@@ -732,6 +728,8 @@ export function AssessmentInterface() {
                 Start Protected Assessment
               </Button>
 
+              {/* Admin Access Hint */}
+              <p className="text-xs text-gray-400 mt-2">Press Shift+Alt+Y for instructor access</p>
             </div>
           </CardContent>
         </Card>

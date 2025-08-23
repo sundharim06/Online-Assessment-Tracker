@@ -232,7 +232,7 @@ export function AssessmentInterface() {
 
     if (isRefresh && (examInProgress === "true" || examStartFlag === "true")) {
       setIsRefreshDetected(true)
-      setIsProtectedMode(false)
+      setIsProtectedMode(false) // Ensure protected mode is disabled
 
       sessionStorage.clear()
 
@@ -419,7 +419,7 @@ export function AssessmentInterface() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!examStarted && event.ctrlKey && event.shiftKey && event.key === "A") {
+      if (!examStarted && event.ctrlKey && event.altKey && event.key === "A") {
         event.preventDefault()
         setShowAdminAccess(true)
       }
@@ -727,6 +727,7 @@ export function AssessmentInterface() {
                 <Play className="h-5 w-5" />
                 Start Protected Assessment
               </Button>
+
             </div>
           </CardContent>
         </Card>

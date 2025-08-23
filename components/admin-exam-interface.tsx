@@ -62,7 +62,7 @@ export function AdminExamInterface() {
 
   const loadQuestions = async () => {
     try {
-      const response = await fetch("/api/questions")
+      const response = await fetch("/api/admin/questions")
       const data = await response.json()
 
       if (data.success && data.questions && data.examConfig) {
@@ -71,7 +71,7 @@ export function AdminExamInterface() {
         setTimeRemaining(data.examConfig.examDurationMinutes * 60)
         setAnswers(data.questions.map((q: Question) => ({ questionId: q.id, selectedAnswer: [], textAnswer: "" })))
 
-        console.log("[v0] ADMIN EXAM MODE: All Questions with Correct Answers:")
+        console.log("[Admin Console] Questions loaded with correct answers:")
         data.questions.forEach((q: Question, index: number) => {
           const options = [
             { key: "A", text: q.optionA },
@@ -104,19 +104,13 @@ export function AdminExamInterface() {
             return matchingOption ? `${q.correctAnswer}: ${matchingOption.text}` : q.correctAnswer
           })()
 
-          console.log(`Question ${index + 1}:`, {
-            id: q.id,
-            question: q.question,
-            type: q.questionType,
-            marks: q.marks,
-            options: options,
-            correctAnswer: q.correctAnswer,
-            correctAnswerText: correctAnswerText,
-          })
+          console.log(`[Admin Console] Question ${index + 1}: ${q.question}`)
+          console.log(`[Admin Console] Correct Answer: ${correctAnswerText}`)
+          console.log("---")
         })
       }
     } catch (error) {
-      console.error("[v0] Error loading questions:", error)
+      console.error("[Admin Console] Error loading questions:", error)
       toast({
         title: "Error",
         description: "Failed to load questions",
@@ -201,16 +195,16 @@ export function AdminExamInterface() {
       return matchingOption ? `${currentQuestion.correctAnswer}: ${matchingOption.text}` : currentQuestion.correctAnswer
     })()
 
-    console.log("[v0] ADMIN MODE: Answer Selected:", {
-      questionId: currentQuestion.id,
-      questionNumber: currentQuestionIndex + 1,
-      selectedAnswer: optionKey,
-      correctAnswer: currentQuestion.correctAnswer,
-      correctAnswerText: correctAnswerText,
-      isCorrect: optionKey === currentQuestion.correctAnswer,
-      questionType: currentQuestion.questionType,
-      marks: currentQuestion.marks,
-    })
+    const selectedAnswerText = (() => {
+      const option = options.find((opt) => opt.key === optionKey)
+      return option ? `${optionKey}: ${option.text}` : optionKey
+    })()
+
+    console.log(`[Admin Console] Question ${currentQuestionIndex + 1}: ${currentQuestion.question}`)
+    console.log(`[Admin Console] Selected Answer: ${selectedAnswerText}`)
+    console.log(`[Admin Console] Correct Answer: ${correctAnswerText}`)
+    console.log(`[Admin Console] Result: ${optionKey === currentQuestion.correctAnswer ? "✓ Correct" : "✗ Incorrect"}`)
+    console.log("---")
   }
 
   const handleTextAnswerChange = (value: string) => {
@@ -227,14 +221,13 @@ export function AdminExamInterface() {
       }),
     )
 
-    console.log("[v0] ADMIN MODE: Text Answer:", {
-      questionId: currentQuestion.id,
-      questionNumber: currentQuestionIndex + 1,
-      textAnswer: value,
-      correctAnswer: currentQuestion.correctAnswer,
-      correctAnswerText: currentQuestion.correctAnswer || "No correct answer provided",
-      questionType: currentQuestion.questionType,
-    })
+    console.log(`[Admin Console] Question ${currentQuestionIndex + 1}: ${currentQuestion.question}`)
+    console.log(`[Admin Console] Selected Answer: ${value}`)
+    console.log(`[Admin Console] Correct Answer: ${currentQuestion.correctAnswer || "No correct answer provided"}`)
+    console.log(
+      `[Admin Console] Result: ${value.toLowerCase().trim() === (currentQuestion.correctAnswer || "").toLowerCase().trim() ? "✓ Correct" : "✗ Incorrect"}`,
+    )
+    console.log("---")
   }
 
   const handleNextQuestion = () => {
@@ -297,47 +290,10 @@ export function AdminExamInterface() {
       if (response.ok) {
         const score = calculateScore()
 
-        console.log("[v0] ADMIN MODE: Final Exam Results:", {
-          totalScore: score,
-          totalPossibleMarks: questions.reduce((sum, q) => sum + q.marks, 0),
-          totalQuestions: questions.length,
-          percentage: Math.round((score / questions.reduce((sum, q) => sum + q.marks, 0)) * 100),
-          detailedAnswers: questions.map((q, index) => {
-            const userAnswer = answers.find((a) => a.questionId === q.id)
-            const selectedAnswer = userAnswer?.selectedAnswer?.[0] || userAnswer?.textAnswer || "Not answered"
-
-            const options = [
-              { key: "A", text: q.optionA },
-              { key: "B", text: q.optionB },
-              { key: "C", text: q.optionC },
-              { key: "D", text: q.optionD },
-              { key: "E", text: q.optionE },
-              { key: "F", text: q.optionF },
-            ].filter((opt) => opt.text && opt.text.trim() !== "")
-
-            const correctAnswerText = (() => {
-              if (!q.correctAnswer || q.correctAnswer.trim() === "") {
-                return "No correct answer provided"
-              }
-              if (q.questionType === "NAT") {
-                return q.correctAnswer
-              }
-              const matchingOption = options.find((opt) => opt.key === q.correctAnswer)
-              return matchingOption ? `${q.correctAnswer}: ${matchingOption.text}` : q.correctAnswer
-            })()
-
-            return {
-              questionNumber: index + 1,
-              question: q.question,
-              correctAnswer: q.correctAnswer,
-              correctAnswerText: correctAnswerText,
-              userAnswer: selectedAnswer,
-              isCorrect: selectedAnswer === q.correctAnswer,
-              marks: q.marks,
-              earnedMarks: selectedAnswer === q.correctAnswer ? q.marks : 0,
-            }
-          }),
-        })
+        console.log("[Admin Console] Final Exam Results:")
+        console.log(`Total Score: ${score}`)
+        console.log(`Total Possible Marks: ${questions.reduce((sum, q) => sum + q.marks, 0)}`)
+        console.log(`Percentage: ${Math.round((score / questions.reduce((sum, q) => sum + q.marks, 0)) * 100)}%`)
 
         sessionStorage.setItem(
           "assessmentResult",
@@ -350,7 +306,7 @@ export function AdminExamInterface() {
         router.push("/results")
       }
     } catch (error) {
-      console.error("[v0] Error submitting admin exam:", error)
+      console.error("[Admin Console] Error submitting exam:", error)
       toast({
         title: "Error",
         description: "Failed to submit exam",

@@ -74,7 +74,7 @@ export function FullscreenController({
       setTimeout(() => {
         enterFullscreen()
         setShowExitWarning(false)
-      }, 50) // Reduced from 100ms to 50ms for even faster auto-return
+      }, 25) // Reduced from 50ms to 25ms for ultra-fast auto-return
     }
   }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts, violationLimit, onTerminate])
 
@@ -148,7 +148,7 @@ export function FullscreenController({
 
         setTimeout(() => {
           enterFullscreen()
-        }, 10) // Reduced from 25ms to 10ms for immediate response
+        }, 5) // Reduced from 10ms to 5ms for immediate response to escape key
       }
     },
     [isFullscreen, preventExit, onViolation, enterFullscreen, exitAttempts, violationLimit, onTerminate],

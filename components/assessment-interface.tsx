@@ -429,6 +429,59 @@ export function AssessmentInterface() {
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [examStarted])
 
+  useEffect(() => {
+    if (isProtectedMode && !isExamTerminated) {
+      const enforceFullscreen = () => {
+        if (!document.fullscreenElement) {
+          // Immediately attempt to re-enter fullscreen
+          const element = document.documentElement
+          if (element.requestFullscreen) {
+            element.requestFullscreen().catch(() => {})
+          } else if ((element as any).webkitRequestFullscreen) {
+            ;(element as any).webkitRequestFullscreen()
+          } else if ((element as any).mozRequestFullScreen) {
+            ;(element as any).mozRequestFullScreen()
+          } else if ((element as any).msRequestFullscreen) {
+            ;(element as any).msRequestFullscreen()
+          }
+        }
+      }
+
+      // Continuous fullscreen monitoring - check every 100ms
+      const fullscreenInterval = setInterval(enforceFullscreen, 100)
+
+      // Additional event listeners for immediate response
+      const handleVisibilityChange = () => {
+        if (document.hidden && isProtectedMode && !isExamTerminated) {
+          setTimeout(enforceFullscreen, 10)
+        }
+      }
+
+      const handleFocusLoss = () => {
+        if (isProtectedMode && !isExamTerminated) {
+          setTimeout(enforceFullscreen, 10)
+        }
+      }
+
+      const handleResize = () => {
+        if (isProtectedMode && !isExamTerminated) {
+          setTimeout(enforceFullscreen, 10)
+        }
+      }
+
+      document.addEventListener("visibilitychange", handleVisibilityChange)
+      window.addEventListener("blur", handleFocusLoss)
+      window.addEventListener("resize", handleResize)
+
+      return () => {
+        clearInterval(fullscreenInterval)
+        document.removeEventListener("visibilitychange", handleVisibilityChange)
+        window.removeEventListener("blur", handleFocusLoss)
+        window.removeEventListener("resize", handleResize)
+      }
+    }
+  }, [isProtectedMode, isExamTerminated])
+
   const handleAdminExamAccess = () => {
     // Exit fullscreen first
     if (document.fullscreenElement) {
@@ -814,7 +867,7 @@ export function AssessmentInterface() {
       <FullscreenController
         enabled={isProtectedMode}
         onFullscreenChange={(isFullscreen) => {
-          if (isProtectedMode && !isFullscreen) {
+          if (isProtectedMode && !isFullscreen && !isExamTerminated) {
             handleSecurityViolation("Fullscreen mode exited", "Unauthorized exit from fullscreen")
           }
         }}

@@ -414,11 +414,12 @@ export function AdminDashboard() {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="upload">Upload Files</TabsTrigger>
           <TabsTrigger value="results">Student Results</TabsTrigger>
           <TabsTrigger value="students">Registered Students</TabsTrigger>
+          <TabsTrigger value="exam">Admin Exam</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -733,6 +734,32 @@ export function AdminDashboard() {
                   </Table>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="exam" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin Exam Mode</CardTitle>
+              <CardDescription>Take the exam without protection mode and with console access</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className="font-semibold text-blue-800 mb-2">Features:</h3>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• No fullscreen or security restrictions</li>
+                    <li>• Console shows correct answers for each question</li>
+                    <li>• Real-time answer validation</li>
+                    <li>• Perfect for testing and reviewing questions</li>
+                  </ul>
+                </div>
+
+                <Button onClick={() => window.open("/admin/exam", "_blank")} className="bg-blue-600 hover:bg-blue-700">
+                  Open Admin Exam
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

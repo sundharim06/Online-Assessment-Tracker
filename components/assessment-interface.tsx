@@ -232,7 +232,7 @@ export function AssessmentInterface() {
 
     if (isRefresh && (examInProgress === "true" || examStartFlag === "true")) {
       setIsRefreshDetected(true)
-      setIsProtectedMode(false) // Ensure protected mode is disabled
+      setIsProtectedMode(false)
 
       sessionStorage.clear()
 
@@ -727,9 +727,6 @@ export function AssessmentInterface() {
                 <Play className="h-5 w-5" />
                 Start Protected Assessment
               </Button>
-
-              {/* Admin Access Hint */}
-              <p className="text-xs text-gray-400 mt-2">Press Ctrl+Shift+A for instructor access</p>
             </div>
           </CardContent>
         </Card>

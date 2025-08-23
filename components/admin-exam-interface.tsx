@@ -33,6 +33,12 @@ export function AdminExamInterface() {
   const router = useRouter()
   const { toast } = useToast()
 
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1)
+    }
+  }
+
   useEffect(() => {
     const originalConsole = { ...console }
     Object.assign(console, originalConsole)
@@ -255,9 +261,26 @@ export function AdminExamInterface() {
     }
   }
 
-  const handlePreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1)
+  const handleLockCurrentQuestion = () => {
+    const currentQuestion = questions[currentQuestionIndex]
+    const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
+
+    const hasAnswer =
+      (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
+      (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
+
+    if (hasAnswer) {
+      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+      toast({
+        title: "Question Locked",
+        description: "Your answer has been locked and cannot be changed.",
+      })
+    } else {
+      toast({
+        title: "No Answer Selected",
+        description: "Please select an answer before locking the question.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -439,6 +462,23 @@ export function AdminExamInterface() {
               <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
             </div>
             <div className="flex items-center gap-4">
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4" />
+                    Submit Assessment
+                  </>
+                )}
+              </Button>
               <Badge
                 variant="outline"
                 className={`flex items-center gap-2 ${
@@ -583,30 +623,23 @@ export function AdminExamInterface() {
               Previous
             </Button>
 
-            {currentQuestionIndex === questions.length - 1 ? (
+            <div className="flex gap-2">
               <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                onClick={handleLockCurrentQuestion}
+                disabled={answeredQuestions.has(currentQuestionIndex)}
+                variant="outline"
+                className="flex items-center gap-2 bg-transparent"
               >
-                {isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4" />
-                    Submit Assessment
-                  </>
-                )}
+                {answeredQuestions.has(currentQuestionIndex) ? <>🔒 Locked</> : <>🔒 Lock Answer</>}
               </Button>
-            ) : (
-              <Button onClick={handleNextQuestion} className="flex items-center gap-2">
-                Next
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            )}
+
+              {currentQuestionIndex < questions.length - 1 && (
+                <Button onClick={handleNextQuestion} className="flex items-center gap-2">
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 

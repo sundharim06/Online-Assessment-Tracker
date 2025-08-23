@@ -447,41 +447,67 @@ export function AssessmentInterface() {
     router.push("/admin/exam")
   }
 
-  if (isRefreshDetected) {
-    return (
-      <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-red-300 shadow-lg">
-          <CardHeader className="text-center bg-red-100">
-            <Shield className="h-16 w-16 text-red-600 mx-auto mb-4" />
-            <CardTitle className="text-2xl text-red-700">Security Violation Detected</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-6">
-            <div className="bg-red-200 p-4 rounded-lg border border-red-300">
-              <p className="text-red-800 font-medium text-center">Page refresh detected during active examination</p>
-            </div>
+  const handleNextQuestion = () => {
+    const currentQuestion = questions[currentQuestionIndex]
+    const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
 
-            <div className="space-y-3 text-sm text-red-700">
-              <p>• Your exam session has been terminated for security reasons</p>
-              <p>• All cached data has been cleared</p>
-              <p>• You cannot retake this examination</p>
-              <p>• Contact your administrator if this was an error</p>
-            </div>
+    const hasAnswer =
+      (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
+      (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
 
-            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300">
-              <p className="text-yellow-800 text-sm text-center">
-                <strong>Redirecting to login page in 3 seconds...</strong>
-              </p>
-            </div>
+    if (hasAnswer) {
+      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+    }
 
-            <div className="text-center">
-              <Button onClick={() => signOut({ callbackUrl: "/auth/signin" })} variant="destructive" className="w-full">
-                Return to Login
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
+    }
+  }
+
+  const handleLockCurrentQuestion = () => {
+    const currentQuestion = questions[currentQuestionIndex]
+    const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
+
+    const hasAnswer =
+      (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
+      (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
+
+    if (hasAnswer) {
+      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+      toast({
+        title: "Question Locked",
+        description: "Your answer has been locked and cannot be changed.",
+      })
+    } else {
+      toast({
+        title: "No Answer Selected",
+        description: "Please select an answer before locking the question.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handlePreviousQuestion = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1)
+    }
+  }
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
+  }
+
+  const startExam = () => {
+    setExamStarted(true)
+    setExamStartTime(new Date())
+    setIsProtectedMode(true)
+    sessionStorage.setItem("examStarted", "true")
+    toast({
+      title: "Exam Started - Protected Mode Activated",
+      description: `You have ${examConfig?.examDurationMinutes} minutes to complete the assessment.`,
+    })
   }
 
   const getAnsweredCount = () =>
@@ -561,45 +587,41 @@ export function AssessmentInterface() {
     )
   }
 
-  const handleNextQuestion = () => {
-    const currentQuestion = questions[currentQuestionIndex]
-    const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
+  if (isRefreshDetected) {
+    return (
+      <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-red-300 shadow-lg">
+          <CardHeader className="text-center bg-red-100">
+            <Shield className="h-16 w-16 text-red-600 mx-auto mb-4" />
+            <CardTitle className="text-2xl text-red-700">Security Violation Detected</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            <div className="bg-red-200 p-4 rounded-lg border border-red-300">
+              <p className="text-red-800 font-medium text-center">Page refresh detected during active examination</p>
+            </div>
 
-    const hasAnswer =
-      (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
-      (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
+            <div className="space-y-3 text-sm text-red-700">
+              <p>• Your exam session has been terminated for security reasons</p>
+              <p>• All cached data has been cleared</p>
+              <p>• You cannot retake this examination</p>
+              <p>• Contact your administrator if this was an error</p>
+            </div>
 
-    // If question is answered, lock it
-    if (hasAnswer) {
-      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
-    }
+            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300">
+              <p className="text-yellow-800 text-sm text-center">
+                <strong>Redirecting to login page in 3 seconds...</strong>
+              </p>
+            </div>
 
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1)
-    }
-  }
-
-  const handlePreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1)
-    }
-  }
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
-  const startExam = () => {
-    setExamStarted(true)
-    setExamStartTime(new Date())
-    setIsProtectedMode(true)
-    sessionStorage.setItem("examStarted", "true")
-    toast({
-      title: "Exam Started - Protected Mode Activated",
-      description: `You have ${examConfig?.examDurationMinutes} minutes to complete the assessment.`,
-    })
+            <div className="text-center">
+              <Button onClick={() => signOut({ callbackUrl: "/auth/signin" })} variant="destructive" className="w-full">
+                Return to Login
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (!examStarted && !isLoading && questions.length > 0 && examConfig) {
@@ -824,6 +846,23 @@ export function AssessmentInterface() {
                 <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
               </div>
               <div className="flex items-center gap-4">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4" />
+                      Submit Assessment
+                    </>
+                  )}
+                </Button>
                 <Badge
                   variant="outline"
                   className={`flex items-center gap-2 ${
@@ -840,12 +879,6 @@ export function AssessmentInterface() {
                 <Badge variant="secondary">
                   {getAnsweredCount()} / {questions.length} Answered
                 </Badge>
-                {tabSwitchCount > 0 && <Badge variant="destructive">Tab Switches: {tabSwitchCount}/2</Badge>}
-                {violationCount > 0 && (
-                  <Badge variant="destructive">
-                    {violationCount} Violation{violationCount !== 1 ? "s" : ""}
-                  </Badge>
-                )}
               </div>
             </div>
             <Progress value={progress} className="h-2 mt-4" />
@@ -975,30 +1008,23 @@ export function AssessmentInterface() {
                 Previous
               </Button>
 
-              {currentQuestionIndex === questions.length - 1 ? (
+              <div className="flex gap-2">
                 <Button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                  onClick={handleLockCurrentQuestion}
+                  disabled={answeredQuestions.has(currentQuestionIndex)}
+                  variant="outline"
+                  className="flex items-center gap-2 bg-transparent"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4" />
-                      Submit Assessment
-                    </>
-                  )}
+                  {answeredQuestions.has(currentQuestionIndex) ? <>🔒 Locked</> : <>🔒 Lock Answer</>}
                 </Button>
-              ) : (
-                <Button onClick={handleNextQuestion} className="flex items-center gap-2">
-                  Next
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              )}
+
+                {currentQuestionIndex < questions.length - 1 && (
+                  <Button onClick={handleNextQuestion} className="flex items-center gap-2">
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 

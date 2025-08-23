@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Maximize, AlertTriangle, Monitor } from "lucide-react"
+import { Maximize, Minimize, AlertTriangle, Monitor } from "lucide-react"
 
 interface FullscreenControllerProps {
   enabled: boolean
@@ -230,11 +230,16 @@ export function FullscreenController({
               Enter Fullscreen
             </Button>
           ) : (
-            // Only show status when in fullscreen, no exit button
-            <div className="flex items-center gap-2 px-3 py-1 bg-green-50 border border-green-200 rounded text-sm">
-              <Monitor className="h-4 w-4 text-green-600" />
-              <span className="text-green-700 font-medium">Protected Mode Active</span>
-            </div>
+            <Button
+              onClick={exitFullscreen}
+              size="sm"
+              variant="outline"
+              className="flex items-center gap-2 bg-transparent"
+              disabled={preventExit}
+            >
+              <Minimize className="h-4 w-4" />
+              {preventExit ? "Protected Mode" : "Exit Fullscreen"}
+            </Button>
           )}
 
           {/* Fullscreen Status Indicator */}

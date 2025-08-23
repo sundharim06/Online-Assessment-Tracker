@@ -7,9 +7,16 @@ interface KeyboardBlockerProps {
   onViolation?: (violation: string, keyCombo: string) => void
   allowedKeys?: string[]
   strictMode?: boolean
+  onCriticalViolation?: (violation: string, keyCombo: string) => void
 }
 
-export function KeyboardBlocker({ enabled, onViolation, allowedKeys = [], strictMode = true }: KeyboardBlockerProps) {
+export function KeyboardBlocker({
+  enabled,
+  onViolation,
+  allowedKeys = [],
+  strictMode = true,
+  onCriticalViolation,
+}: KeyboardBlockerProps) {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return
@@ -39,9 +46,16 @@ export function KeyboardBlocker({ enabled, onViolation, allowedKeys = [], strict
 
       let blocked = false
       let violationType = ""
+      let isCritical = false
+
+      if (key === "Escape") {
+        blocked = true
+        violationType = "Escape key pressed - Exam termination attempt"
+        isCritical = true
+      }
 
       // Block all function keys (F1-F24)
-      if (key.match(/^F\d+$/)) {
+      else if (key.match(/^F\d+$/)) {
         blocked = true
         violationType = "Function key blocked"
       }
@@ -147,15 +161,9 @@ export function KeyboardBlocker({ enabled, onViolation, allowedKeys = [], strict
       }
 
       // In strict mode, block additional keys
-      if (strictMode) {
-        // Block escape key
-        if (key === "Escape") {
-          blocked = true
-          violationType = "Escape key blocked"
-        }
-
+      if (strictMode && !isCritical) {
         // Block additional navigation
-        else if (key === "Home" || key === "End" || (ctrl && key === "Home") || (ctrl && key === "End")) {
+        if (key === "Home" || key === "End" || (ctrl && key === "Home") || (ctrl && key === "End")) {
           blocked = true
           violationType = "Navigation key blocked"
         }
@@ -173,13 +181,17 @@ export function KeyboardBlocker({ enabled, onViolation, allowedKeys = [], strict
         event.stopPropagation()
         event.stopImmediatePropagation()
 
-        onViolation?.(violationType, keyCombo)
+        if (isCritical && onCriticalViolation) {
+          onCriticalViolation(violationType, keyCombo)
+        } else {
+          onViolation?.(violationType, keyCombo)
+        }
         return false
       }
 
       return true
     },
-    [enabled, onViolation, allowedKeys, strictMode],
+    [enabled, onViolation, onCriticalViolation, allowedKeys, strictMode],
   )
 
   const handleKeyUp = useCallback(

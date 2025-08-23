@@ -672,12 +672,28 @@ export function AssessmentInterface() {
       onModeChange={setIsProtectedMode}
       title="Online Assessment - Protected Mode"
       showViolations={true}
+      hideExitButton={examStarted}
     >
       <KeyboardBlocker
         enabled={isProtectedMode}
         onViolation={handleSecurityViolation}
         strictMode={true}
         allowedKeys={["Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete"]}
+        onCriticalViolation={(violation, keyCombo) => {
+          // Terminate exam immediately for critical violations
+          setIsExamTerminated(true)
+          setTerminationReason("security_violation")
+          setIsProtectedMode(false)
+
+          toast({
+            title: "Exam Terminated - Critical Security Violation",
+            description: `${violation}. Your exam has been terminated immediately.`,
+            variant: "destructive",
+          })
+
+          // Submit terminated exam
+          submitTerminatedExam("security_violation")
+        }}
       />
 
       <FullscreenController

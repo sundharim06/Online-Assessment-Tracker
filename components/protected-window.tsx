@@ -15,6 +15,7 @@ interface ProtectedWindowProps {
   onModeChange?: (isProtected: boolean) => void
   title?: string
   showViolations?: boolean
+  hideExitButton?: boolean
 }
 
 export function ProtectedWindow({
@@ -24,6 +25,7 @@ export function ProtectedWindow({
   onModeChange,
   title = "Protected Exam Environment",
   showViolations = false,
+  hideExitButton = false,
 }: ProtectedWindowProps) {
   const [isProtected, setIsProtected] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
@@ -168,15 +170,17 @@ export function ProtectedWindow({
                 {violationCount} Violation{violationCount !== 1 ? "s" : ""}
               </Badge>
             )}
-            <Button
-              onClick={disableProtection}
-              size="sm"
-              variant="outline"
-              className="border-red-300 text-red-100 hover:bg-red-700 bg-transparent"
-            >
-              <Unlock className="h-3 w-3 mr-1" />
-              Exit Protected Mode
-            </Button>
+            {!hideExitButton && (
+              <Button
+                onClick={disableProtection}
+                size="sm"
+                variant="outline"
+                className="border-red-300 text-red-100 hover:bg-red-700 bg-transparent"
+              >
+                <Unlock className="h-3 w-3 mr-1" />
+                Exit Protected Mode
+              </Button>
+            )}
           </div>
         </div>
       )}

@@ -724,7 +724,7 @@ export function AssessmentInterface() {
           }
         }}
         onViolation={handleSecurityViolation}
-        autoEnter={true}
+        autoEnter={false}
         preventExit={true}
         showControls={false}
       />

@@ -71,10 +71,8 @@ export function FullscreenController({
       setShowExitWarning(true)
       onViolation?.(`Fullscreen exit attempt ${newAttempts}`, "fullscreen_violation")
 
-      setTimeout(() => {
-        enterFullscreen()
-        setShowExitWarning(false)
-      }, 25) // Reduced from 50ms to 25ms for ultra-fast auto-return
+      enterFullscreen()
+      setShowExitWarning(false)
     }
   }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts, violationLimit, onTerminate])
 
@@ -146,9 +144,7 @@ export function FullscreenController({
 
         onViolation?.(`Escape key violation - Attempt ${newAttempts}`, "escape_key_violation")
 
-        setTimeout(() => {
-          enterFullscreen()
-        }, 5) // Reduced from 10ms to 5ms for immediate response to escape key
+        enterFullscreen()
       }
     },
     [isFullscreen, preventExit, onViolation, enterFullscreen, exitAttempts, violationLimit, onTerminate],

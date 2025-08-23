@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
 
     if (studentEmail && shouldUpdateSheet) {
       try {
-        await updateStudentScore(studentEmail, {
+        const updateData = {
           score: totalScore,
           totalQuestions,
           percentage: `${percentage}%`,
@@ -132,9 +132,11 @@ export async function POST(request: NextRequest) {
           }),
           ...(examType === "admin" && {
             examType: "ADMIN",
-            adminNote: "Admin test exam - not counted in student records",
+            adminNote: "Admin test exam - results recorded for review",
           }),
-        })
+        }
+
+        await updateStudentScore(studentEmail, updateData)
 
         return NextResponse.json({
           success: true,
@@ -162,10 +164,11 @@ export async function POST(request: NextRequest) {
           },
         })
       } catch (sheetError) {
+        console.error("[v0] Sheet update error:", sheetError)
         return NextResponse.json({
           success: true,
           sheetUpdated: false,
-          sheetError: sheetError instanceof Error ? sheetError.message : "Unknown error",
+          sheetError: sheetError instanceof Error ? sheetError.message : "Sheet update failed",
           result: {
             totalScore,
             totalMarks: totalPossibleMarksForEntireExam,

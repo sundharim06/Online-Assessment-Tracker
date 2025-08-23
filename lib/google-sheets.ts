@@ -315,6 +315,8 @@ export async function updateStudentScore(
     tabSwitchCount?: number
     answeredQuestions?: number
     totalAvailableQuestions?: number
+    examType?: string
+    adminNote?: string
   },
 ): Promise<void> {
   try {
@@ -347,7 +349,17 @@ export async function updateStudentScore(
     studentRow.set("Percentage", scoreData.percentage)
     studentRow.set("Submitted At", indianTime)
 
-    if (scoreData.status.includes("TERMINATED")) {
+    if (scoreData.examType === "ADMIN") {
+      studentRow.set("Status", "ADMIN EXAM COMPLETED")
+      if (scoreData.adminNote) {
+        try {
+          studentRow.set("Notes", scoreData.adminNote)
+        } catch {
+          // If Notes column doesn't exist, append to status
+          studentRow.set("Status", `ADMIN EXAM COMPLETED - ${scoreData.adminNote}`)
+        }
+      }
+    } else if (scoreData.status.includes("TERMINATED")) {
       // Set clear terminated status
       studentRow.set("Status", "TERMINATED")
 
@@ -379,6 +391,7 @@ export async function updateStudentScore(
 
     await studentRow.save()
   } catch (error) {
+    console.error("[v0] Error updating student score:", error)
     throw new Error(`Failed to update student score: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }

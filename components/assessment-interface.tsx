@@ -42,68 +42,6 @@ export function AssessmentInterface() {
   const router = useRouter()
   const { toast } = useToast()
 
-  const handleSecurityViolation = useCallback(
-    (violation: string, details?: string) => {
-      const violationMessage = details ? `${violation}: ${details}` : violation
-      setSecurityViolations((prev) => [...prev, violationMessage])
-      setViolationCount((prev) => prev + 1)
-
-      // Track tab switches specifically
-      if (violation.includes("tab") || violation.includes("window") || violation.includes("focus")) {
-        setTabSwitchCount((prev) => {
-          const newCount = prev + 1
-
-          if (newCount >= 2) {
-            // Terminate exam after 2 tab switches
-            setIsExamTerminated(true)
-            setTerminationReason("cheated")
-            setIsProtectedMode(false)
-
-            toast({
-              title: "Exam Terminated - Cheating Detected",
-              description: "You have switched tabs/windows 2 times. Your exam has been terminated for cheating.",
-              variant: "destructive",
-            })
-
-            // Submit only answered questions with terminated status
-            submitTerminatedExam("cheated")
-            return newCount
-          } else {
-            toast({
-              title: `Tab Switch Warning (${newCount}/2)`,
-              description: "One more tab switch will terminate your exam permanently.",
-              variant: "destructive",
-            })
-            return newCount
-          }
-        })
-      }
-
-      toast({
-        title: "Security Violation",
-        description: violationMessage,
-        variant: "destructive",
-      })
-
-      if (violationCount >= 4) {
-        toast({
-          title: "Exam Terminated",
-          description: "Too many security violations detected. Your exam has been terminated.",
-          variant: "destructive",
-        })
-
-        sessionStorage.setItem("examTerminated", "security_violations")
-        sessionStorage.removeItem("examInProgress")
-        sessionStorage.removeItem("examStarted")
-
-        setTimeout(() => {
-          signOut({ callbackUrl: "/auth/signin" })
-        }, 3000)
-      }
-    },
-    [violationCount, toast],
-  )
-
   const submitTerminatedExam = useCallback(
     async (reason: string) => {
       if (!studentInfo) return
@@ -166,6 +104,64 @@ export function AssessmentInterface() {
       }
     },
     [studentInfo, answers, router, toast, tabSwitchCount, questions.length],
+  )
+
+  const handleSecurityViolation = useCallback(
+    (violation: string, details?: string) => {
+      const violationMessage = details ? `${violation}: ${details}` : violation
+      setSecurityViolations((prev) => [...prev, violationMessage])
+      setViolationCount((prev) => prev + 1)
+
+      // Track tab switches specifically
+      if (violation.includes("tab") || violation.includes("window") || violation.includes("focus")) {
+        setTabSwitchCount((prev) => {
+          const newCount = prev + 1
+
+          if (newCount >= 2) {
+            setIsExamTerminated(true)
+            setTerminationReason("cheated")
+            setIsProtectedMode(false)
+
+            toast({
+              title: "Exam Terminated - Cheating Detected",
+              description: "You have switched tabs/windows 2 times. Your exam has been terminated for cheating.",
+              variant: "destructive",
+            })
+
+            // Submit only answered questions with terminated status
+            submitTerminatedExam("cheated")
+            return newCount
+          } else {
+            toast({
+              title: `Tab Switch Warning (${newCount}/2)`,
+              description: "One more tab switch will terminate your exam permanently.",
+              variant: "destructive",
+            })
+            return newCount
+          }
+        })
+      }
+
+      toast({
+        title: "Security Violation",
+        description: violationMessage,
+        variant: "destructive",
+      })
+
+      if (violationCount >= 3) {
+        toast({
+          title: "Exam Terminated - Multiple Security Violations",
+          description: "Too many security violations detected. Your exam has been terminated.",
+          variant: "destructive",
+        })
+
+        setIsExamTerminated(true)
+        setTerminationReason("security_violation")
+        setIsProtectedMode(false)
+        submitTerminatedExam("security_violation")
+      }
+    },
+    [violationCount, toast, submitTerminatedExam],
   )
 
   const handleSubmit = useCallback(async () => {
@@ -680,7 +676,6 @@ export function AssessmentInterface() {
         strictMode={true}
         allowedKeys={["Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete"]}
         onCriticalViolation={(violation, keyCombo) => {
-          // Terminate exam immediately for critical violations
           setIsExamTerminated(true)
           setTerminationReason("security_violation")
           setIsProtectedMode(false)
@@ -691,7 +686,7 @@ export function AssessmentInterface() {
             variant: "destructive",
           })
 
-          // Submit terminated exam
+          // Submit terminated exam with current progress
           submitTerminatedExam("security_violation")
         }}
       />

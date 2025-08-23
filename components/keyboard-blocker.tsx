@@ -50,7 +50,7 @@ export function KeyboardBlocker({
 
       if (key === "Escape") {
         blocked = true
-        violationType = "Escape key pressed - Exam termination attempt"
+        violationType = "Escape key pressed - Critical security violation detected"
         isCritical = true
       }
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Trophy, FileText } from "lucide-react"
+import { CheckCircle, XCircle, Trophy } from "lucide-react"
 
 interface AssessmentResult {
   totalScore: number
@@ -12,6 +12,10 @@ interface AssessmentResult {
   correctAnswers: number
   wrongAnswers: number
   submittedAt: string
+  answeredQuestions?: number
+  totalAvailableQuestions?: number
+  marksFromAnsweredQuestions?: number
+  totalExamMarks?: number
   reviewData?: any // Assuming reviewData is an object or array
 }
 
@@ -63,6 +67,11 @@ export default function ResultsPage() {
                 {result.totalScore}/{result.totalMarks}
               </div>
               <div className="text-sm text-gray-600">Total Marks</div>
+              {result.answeredQuestions && result.totalAvailableQuestions && (
+                <div className="text-xs text-gray-500 mt-1">
+                  Attempted: {result.answeredQuestions}/{result.totalAvailableQuestions} questions
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">

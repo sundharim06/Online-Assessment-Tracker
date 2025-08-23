@@ -29,6 +29,10 @@ export async function POST(request: NextRequest) {
 
     const totalQuestions = answersToEvaluate.length
 
+    const totalPossibleMarksForEntireExam = questions.reduce((sum, question) => {
+      return sum + (question.marks || 1)
+    }, 0)
+
     const totalPossibleMarks = answersToEvaluate.reduce((sum, answer) => {
       const question = questions.find((q) => q.id === answer.questionId)
       return sum + (question?.marks || 1)
@@ -92,7 +96,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const percentage = totalPossibleMarks > 0 ? Math.round((totalScore / totalPossibleMarks) * 100) : 0
+    const percentage =
+      totalPossibleMarksForEntireExam > 0 ? Math.round((totalScore / totalPossibleMarksForEntireExam) * 100) : 0
 
     const examStatus =
       status === "terminated"
@@ -124,7 +129,7 @@ export async function POST(request: NextRequest) {
           sheetUpdated: true,
           result: {
             totalScore,
-            totalMarks: totalPossibleMarks,
+            totalMarks: totalPossibleMarksForEntireExam,
             correctAnswers,
             wrongAnswers,
             submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
@@ -135,6 +140,8 @@ export async function POST(request: NextRequest) {
             answeredQuestions: totalQuestions,
             totalAvailableQuestions: questions.length,
             lockedQuestions: totalQuestions,
+            marksFromAnsweredQuestions: totalPossibleMarks,
+            totalExamMarks: totalPossibleMarksForEntireExam,
             evaluationNote:
               lockedQuestionIdsSet.size > 0
                 ? "Only locked questions were evaluated"
@@ -148,7 +155,7 @@ export async function POST(request: NextRequest) {
           sheetError: sheetError instanceof Error ? sheetError.message : "Unknown error",
           result: {
             totalScore,
-            totalMarks: totalPossibleMarks,
+            totalMarks: totalPossibleMarksForEntireExam,
             correctAnswers,
             wrongAnswers,
             submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
@@ -159,6 +166,8 @@ export async function POST(request: NextRequest) {
             answeredQuestions: totalQuestions,
             totalAvailableQuestions: questions.length,
             lockedQuestions: totalQuestions,
+            marksFromAnsweredQuestions: totalPossibleMarks,
+            totalExamMarks: totalPossibleMarksForEntireExam,
             evaluationNote:
               lockedQuestionIdsSet.size > 0
                 ? "Only locked questions were evaluated"
@@ -173,7 +182,7 @@ export async function POST(request: NextRequest) {
         sheetError: "No student email provided",
         result: {
           totalScore,
-          totalMarks: totalPossibleMarks,
+          totalMarks: totalPossibleMarksForEntireExam,
           correctAnswers,
           wrongAnswers,
           submittedAt: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
@@ -184,6 +193,8 @@ export async function POST(request: NextRequest) {
           answeredQuestions: totalQuestions,
           totalAvailableQuestions: questions.length,
           lockedQuestions: totalQuestions,
+          marksFromAnsweredQuestions: totalPossibleMarks,
+          totalExamMarks: totalPossibleMarksForEntireExam,
           evaluationNote:
             lockedQuestionIdsSet.size > 0
               ? "Only locked questions were evaluated"

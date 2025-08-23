@@ -4,7 +4,7 @@ import { fetchQuestions, updateStudentScore } from "@/lib/google-sheets"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { studentId, answers, status, terminationReason, tabSwitchCount } = body
+    const { studentId, answers, lockedQuestionIds, status, terminationReason, tabSwitchCount } = body
 
     if (!studentId || !answers || !Array.isArray(answers)) {
       return NextResponse.json({ error: "Invalid submission data" }, { status: 400 })
@@ -21,20 +21,22 @@ export async function POST(request: NextRequest) {
     let totalScore = 0
     let correctAnswers = 0
     let wrongAnswers = 0
-    const totalQuestions = answers.length
 
-    const totalPossibleMarks =
-      status === "terminated"
-        ? answers.reduce((sum, answer) => {
-            const question = questions.find((q) => q.id === answer.questionId)
-            return sum + (question?.marks || 1)
-          }, 0)
-        : questions.reduce((sum, question) => sum + (question.marks || 1), 0)
+    const lockedQuestionIdsSet = new Set(lockedQuestionIds || [])
+    const answersToEvaluate = answers.filter(
+      (answer) => lockedQuestionIdsSet.size === 0 || lockedQuestionIdsSet.has(answer.questionId),
+    )
+
+    const totalQuestions = answersToEvaluate.length
+
+    const totalPossibleMarks = answersToEvaluate.reduce((sum, answer) => {
+      const question = questions.find((q) => q.id === answer.questionId)
+      return sum + (question?.marks || 1)
+    }, 0)
 
     const reviewData: any[] = []
 
-    // Process each answer
-    for (const answer of answers) {
+    for (const answer of answersToEvaluate) {
       const question = questions.find((q) => q.id === answer.questionId)
 
       if (!question) continue
@@ -132,6 +134,11 @@ export async function POST(request: NextRequest) {
             tabSwitchCount: tabSwitchCount || 0,
             answeredQuestions: totalQuestions,
             totalAvailableQuestions: questions.length,
+            lockedQuestions: totalQuestions,
+            evaluationNote:
+              lockedQuestionIdsSet.size > 0
+                ? "Only locked questions were evaluated"
+                : "All submitted questions were evaluated",
           },
         })
       } catch (sheetError) {
@@ -151,6 +158,11 @@ export async function POST(request: NextRequest) {
             tabSwitchCount: tabSwitchCount || 0,
             answeredQuestions: totalQuestions,
             totalAvailableQuestions: questions.length,
+            lockedQuestions: totalQuestions,
+            evaluationNote:
+              lockedQuestionIdsSet.size > 0
+                ? "Only locked questions were evaluated"
+                : "All submitted questions were evaluated",
           },
         })
       }
@@ -171,6 +183,11 @@ export async function POST(request: NextRequest) {
           tabSwitchCount: tabSwitchCount || 0,
           answeredQuestions: totalQuestions,
           totalAvailableQuestions: questions.length,
+          lockedQuestions: totalQuestions,
+          evaluationNote:
+            lockedQuestionIdsSet.size > 0
+              ? "Only locked questions were evaluated"
+              : "All submitted questions were evaluated",
         },
       })
     }

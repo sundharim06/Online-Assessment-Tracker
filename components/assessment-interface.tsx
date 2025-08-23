@@ -57,6 +57,10 @@ export function AssessmentInterface() {
             (answer.textAnswer && answer.textAnswer.trim().length > 0),
         )
 
+        const lockedQuestionIds = Array.from(answeredQuestions)
+          .map((index) => questions[index]?.id)
+          .filter(Boolean)
+
         const response = await fetch("/api/assessment/submit", {
           method: "POST",
           headers: {
@@ -65,6 +69,7 @@ export function AssessmentInterface() {
           body: JSON.stringify({
             studentId: Number.parseInt(studentInfo.id),
             answers: answeredOnly, // Submit only answered questions
+            lockedQuestionIds, // Send locked question IDs for evaluation
             studentName: studentInfo.name,
             studentSection: sessionStorage.getItem("studentSection") || "Unknown",
             studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
@@ -173,6 +178,10 @@ export function AssessmentInterface() {
     sessionStorage.removeItem("examStarted")
 
     try {
+      const lockedQuestionIds = Array.from(answeredQuestions)
+        .map((index) => questions[index]?.id)
+        .filter(Boolean)
+
       const response = await fetch("/api/assessment/submit", {
         method: "POST",
         headers: {
@@ -181,6 +190,7 @@ export function AssessmentInterface() {
         body: JSON.stringify({
           studentId: Number.parseInt(studentInfo.id),
           answers: answers,
+          lockedQuestionIds, // Send locked question IDs for evaluation
           studentName: studentInfo.name,
           studentSection: sessionStorage.getItem("studentSection") || "Unknown",
           studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
@@ -359,6 +369,31 @@ export function AssessmentInterface() {
     return () => clearTimeout(timer)
   }, [timeRemaining, examStarted, questions.length, handleSubmit, toast])
 
+  useEffect(() => {
+    if (!examStarted && !isLoading && questions.length > 0 && examConfig) {
+      // Auto-enter fullscreen for instructions page without asking permission
+      const enterInstructionsFullscreen = async () => {
+        try {
+          const element = document.documentElement
+          if (element.requestFullscreen) {
+            await element.requestFullscreen()
+          } else if ((element as any).webkitRequestFullscreen) {
+            await (element as any).webkitRequestFullscreen()
+          } else if ((element as any).mozRequestFullScreen) {
+            await (element as any).mozRequestFullScreen()
+          } else if ((element as any).msRequestFullscreen) {
+            await (element as any).msRequestFullscreen()
+          }
+        } catch (error) {
+          // Silently handle fullscreen errors on instructions page
+          console.log("Fullscreen not available for instructions page")
+        }
+      }
+
+      enterInstructionsFullscreen()
+    }
+  }, [examStarted, isLoading, questions.length, examConfig])
+
   if (isRefreshDetected) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
@@ -504,7 +539,6 @@ export function AssessmentInterface() {
   }
 
   const startExam = () => {
-    // Enhanced exam start function with protected mode
     setExamStarted(true)
     setExamStartTime(new Date())
     setIsProtectedMode(true)
@@ -517,77 +551,69 @@ export function AssessmentInterface() {
 
   if (!examStarted && !isLoading && questions.length > 0 && examConfig) {
     return (
-      <ProtectedWindow enabled={false}>
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl text-blue-700">Online Assessment</CardTitle>
-              <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="bg-blue-50 p-6 rounded-lg space-y-4">
-                <h3 className="font-semibold text-lg text-blue-900">Exam Instructions</h3>
-                <div className="space-y-2 text-blue-800">
-                  <p>
-                    • Total Questions: <strong>{questions.length}</strong>
-                  </p>
-                  <p>
-                    • Time Duration: <strong>{examConfig.examDurationMinutes} minutes</strong>
-                  </p>
-                  <p>• Once you move to the next question, you cannot go back to change your answer</p>
-                  <p>• Make sure to answer each question before proceeding</p>
-                  <p>• The exam will auto-submit when time runs out</p>
-                </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-2xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl text-blue-700">Online Assessment</CardTitle>
+            <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="bg-blue-50 p-6 rounded-lg space-y-4">
+              <h3 className="font-semibold text-lg text-blue-900">Exam Instructions</h3>
+              <div className="space-y-2 text-blue-800">
+                <p>
+                  • Total Questions: <strong>{questions.length}</strong>
+                </p>
+                <p>
+                  • Time Duration: <strong>{examConfig.examDurationMinutes} minutes</strong>
+                </p>
+                <p>• Once you move to the next question, you cannot go back to change your answer</p>
+                <p>• Make sure to answer each question before proceeding</p>
+                <p>• The exam will auto-submit when time runs out</p>
               </div>
+            </div>
 
-              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-                {" "}
-                {/* Enhanced security notice with protected mode details */}
-                <div className="flex items-center gap-2 text-red-800 mb-2">
-                  <Shield className="h-5 w-5" />
-                  <p className="font-medium">Protected Exam Environment</p>
-                </div>
-                <div className="space-y-1 text-sm text-red-700">
-                  <p>
-                    • <strong>Fullscreen mode will be enforced</strong> during the exam
-                  </p>
-                  <p>
-                    • <strong>All keyboard shortcuts will be disabled</strong>
-                  </p>
-                  <p>
-                    • <strong>Right-click and text selection will be blocked</strong>
-                  </p>
-                  <p>
-                    • <strong>Window switching (Alt+Tab) will be prevented</strong>
-                  </p>
-                  <p>• Page refresh will terminate your exam session permanently</p>
-                  <p>• Multiple security violations will result in automatic termination</p>
-                </div>
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <div className="flex items-center gap-2 text-red-800 mb-2">
+                <Shield className="h-5 w-5" />
+                <p className="font-medium">Protected Exam Environment</p>
               </div>
+              <div className="space-y-1 text-sm text-red-700">
+                <p>
+                  • <strong>Complete protection mode will be activated</strong> when you start the exam
+                </p>
+                <p>
+                  • <strong>All keyboard shortcuts will be disabled</strong>
+                </p>
+                <p>
+                  • <strong>Right-click and text selection will be blocked</strong>
+                </p>
+                <p>
+                  • <strong>Window switching (Alt+Tab) will be prevented</strong>
+                </p>
+                <p>• Page refresh will terminate your exam session permanently</p>
+                <p>• Multiple security violations will result in automatic termination</p>
+              </div>
+            </div>
 
-              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-                <div className="flex items-center gap-2 text-yellow-800">
-                  <AlertCircle className="h-5 w-5" />
-                  <p className="font-medium">
-                    Important: Once you start, the timer cannot be paused and protected mode will activate!
-                  </p>
-                </div>
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <div className="flex items-center gap-2 text-yellow-800">
+                <AlertCircle className="h-5 w-5" />
+                <p className="font-medium">
+                  Important: Once you start, the timer cannot be paused and complete protection mode will activate!
+                </p>
               </div>
+            </div>
 
-              <div className="text-center">
-                <Button
-                  onClick={startExam}
-                  size="lg"
-                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
-                >
-                  <Play className="h-5 w-5" />
-                  Start Protected Assessment
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </ProtectedWindow>
+            <div className="text-center">
+              <Button onClick={startExam} size="lg" className="bg-green-600 hover:bg-green-700 flex items-center gap-2">
+                <Play className="h-5 w-5" />
+                Start Protected Assessment
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     )
   }
 
@@ -686,7 +712,6 @@ export function AssessmentInterface() {
             variant: "destructive",
           })
 
-          // Submit terminated exam with current progress
           submitTerminatedExam("security_violation")
         }}
       />

@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { useRouter } from "next/router"
 
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,6 +34,7 @@ export function AdminDashboard() {
   const [students, setStudents] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+  const router = useRouter()
 
   const handleLogin = () => {
     // Simple password authentication (in production, use proper auth)
@@ -753,10 +755,11 @@ export function AdminDashboard() {
                     <li>• Console shows correct answers for each question</li>
                     <li>• Real-time answer validation</li>
                     <li>• Perfect for testing and reviewing questions</li>
+                    <li>• Results saved to normal exam database for tracking</li>
                   </ul>
                 </div>
 
-                <Button onClick={() => window.open("/admin/exam", "_blank")} className="bg-blue-600 hover:bg-blue-700">
+                <Button onClick={() => router.push("/admin/exam")} className="bg-blue-600 hover:bg-blue-700">
                   Open Admin Exam
                 </Button>
               </div>

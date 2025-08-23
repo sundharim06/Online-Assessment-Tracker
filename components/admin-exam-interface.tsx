@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Clock, CheckCircle, AlertCircle, ArrowLeft, ArrowRight, Home } from "lucide-react"
@@ -14,22 +12,43 @@ import { useRouter } from "next/navigation"
 interface Question {
   id: number
   question: string
-  options: string[]
-  correct_answer: string
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  optionE?: string
+  optionF?: string
+  correctAnswer: string
   marks: number
+  questionType: string
+}
+
+interface StudentAnswer {
+  questionId: number
+  selectedAnswer: string[]
+  textAnswer?: string
 }
 
 export function AdminExamInterface() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<number, string>>({})
+  const [answers, setAnswers] = useState<StudentAnswer[]>([])
   const [timeLeft, setTimeLeft] = useState(3600) // 60 minutes
   const [isLoading, setIsLoading] = useState(true)
   const [examStarted, setExamStarted] = useState(false)
+  const [studentInfo, setStudentInfo] = useState<{ id: string; name: string } | null>(null)
   const { toast } = useToast()
   const router = useRouter()
 
   useEffect(() => {
+    const originalConsole = { ...console }
+
+    // Restore full console functionality
+    Object.assign(console, originalConsole)
+
+    // Set student info for admin exam
+    setStudentInfo({ id: "admin", name: "Administrator" })
+
     loadQuestions()
   }, [])
 
@@ -56,16 +75,29 @@ export function AdminExamInterface() {
 
       if (data.success && data.questions) {
         setQuestions(data.questions)
-        console.log(
-          "[v0] ADMIN MODE: All Questions with Answers:",
-          data.questions.map((q: Question) => ({
+        setAnswers(data.questions.map((q: Question) => ({ questionId: q.id, selectedAnswer: [], textAnswer: "" })))
+
+        console.log("[v0] ADMIN EXAM MODE: All Questions with Correct Answers:")
+        data.questions.forEach((q: Question, index: number) => {
+          const options = [
+            { key: "A", text: q.optionA },
+            { key: "B", text: q.optionB },
+            { key: "C", text: q.optionC },
+            { key: "D", text: q.optionD },
+            { key: "E", text: q.optionE },
+            { key: "F", text: q.optionF },
+          ].filter((opt) => opt.text && opt.text.trim() !== "")
+
+          console.log(`Question ${index + 1}:`, {
             id: q.id,
             question: q.question,
-            options: q.options,
-            correctAnswer: q.correct_answer,
+            type: q.questionType,
             marks: q.marks,
-          })),
-        )
+            options: options,
+            correctAnswer: q.correctAnswer,
+            correctAnswerText: options.find((opt) => opt.key === q.correctAnswer)?.text || q.correctAnswer,
+          })
+        })
       } else {
         toast({
           title: "Error",
@@ -89,57 +121,155 @@ export function AdminExamInterface() {
     setExamStarted(true)
     toast({
       title: "Admin Exam Started",
-      description: "Check console for answers. No protection mode active.",
+      description: "Console access enabled. Check console for all answers.",
     })
     if (questions.length > 0) {
-      console.log("[v0] ADMIN MODE: Current Question Answer:", {
-        questionId: questions[0].id,
-        question: questions[0].question,
-        correctAnswer: questions[0].correct_answer,
+      const currentQuestion = questions[0]
+      console.log("[v0] ADMIN MODE: Starting with Question 1:")
+      console.log({
+        questionId: currentQuestion.id,
+        question: currentQuestion.question,
+        correctAnswer: currentQuestion.correctAnswer,
+        type: currentQuestion.questionType,
+        marks: currentQuestion.marks,
       })
     }
   }
 
   const handleAnswerChange = (value: string) => {
     const currentQuestion = questions[currentQuestionIndex]
-    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: value }))
+    const isMultipleChoice = currentQuestion.questionType === "MSQ"
+
+    setAnswers((prev) =>
+      prev.map((ans) => {
+        if (ans.questionId === currentQuestion.id) {
+          if (isMultipleChoice) {
+            const currentSelections = ans.selectedAnswer || []
+            const isSelected = currentSelections.includes(value)
+
+            if (isSelected) {
+              return { ...ans, selectedAnswer: currentSelections.filter((a) => a !== value) }
+            } else {
+              return { ...ans, selectedAnswer: [...currentSelections, value] }
+            }
+          } else {
+            return { ...ans, selectedAnswer: [value] }
+          }
+        }
+        return ans
+      }),
+    )
 
     console.log("[v0] ADMIN MODE: Answer Selected:", {
       questionId: currentQuestion.id,
+      questionNumber: currentQuestionIndex + 1,
       selectedAnswer: value,
-      correctAnswer: currentQuestion.correct_answer,
-      isCorrect: value === currentQuestion.correct_answer,
+      correctAnswer: currentQuestion.correctAnswer,
+      isCorrect: value === currentQuestion.correctAnswer,
+      questionType: currentQuestion.questionType,
+      marks: currentQuestion.marks,
+    })
+  }
+
+  const handleTextAnswerChange = (value: string) => {
+    const currentQuestion = questions[currentQuestionIndex]
+
+    setAnswers((prev) =>
+      prev.map((ans) => {
+        if (ans.questionId === currentQuestion.id) {
+          return { ...ans, textAnswer: value, selectedAnswer: [] }
+        }
+        return ans
+      }),
+    )
+
+    console.log("[v0] ADMIN MODE: Text Answer:", {
+      questionId: currentQuestion.id,
+      questionNumber: currentQuestionIndex + 1,
+      textAnswer: value,
+      correctAnswer: currentQuestion.correctAnswer,
+      questionType: currentQuestion.questionType,
     })
   }
 
   const goToQuestion = (index: number) => {
     setCurrentQuestionIndex(index)
     const question = questions[index]
-    console.log("[v0] ADMIN MODE: Question Navigation:", {
+
+    console.log("[v0] ADMIN MODE: Navigated to Question:", {
+      questionNumber: index + 1,
       questionId: question.id,
       question: question.question,
-      correctAnswer: question.correct_answer,
-      currentAnswer: answers[question.id] || "Not answered",
+      correctAnswer: question.correctAnswer,
+      questionType: question.questionType,
+      marks: question.marks,
+      currentAnswer:
+        answers.find((a) => a.questionId === question.id)?.selectedAnswer ||
+        answers.find((a) => a.questionId === question.id)?.textAnswer ||
+        "Not answered",
     })
   }
 
   const handleSubmit = async () => {
     try {
-      const score = calculateScore()
-      console.log("[v0] ADMIN MODE: Final Score:", {
-        totalScore: score,
-        totalQuestions: questions.length,
-        percentage: Math.round((score / questions.reduce((sum, q) => sum + q.marks, 0)) * 100),
-        answers: answers,
+      const response = await fetch("/api/assessment/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          studentId: 999999, // Special admin ID
+          answers: answers,
+          lockedQuestionIds: questions.map((q) => q.id), // All questions considered locked for admin
+          studentName: "Administrator",
+          studentSection: "Admin",
+          studentDepartment: "Administration",
+          studentEmail: "admin@system.com",
+          status: "completed",
+        }),
       })
 
-      toast({
-        title: "Admin Exam Completed",
-        description: `Score: ${score}/${questions.reduce((sum, q) => sum + q.marks, 0)} - Check console for details`,
-      })
+      const result = await response.json()
 
-      // Redirect to admin dashboard instead of results
-      router.push("/admin")
+      if (response.ok) {
+        const score = calculateScore()
+        console.log("[v0] ADMIN MODE: Final Exam Results:", {
+          totalScore: score,
+          totalPossibleMarks: questions.reduce((sum, q) => sum + q.marks, 0),
+          totalQuestions: questions.length,
+          percentage: Math.round((score / questions.reduce((sum, q) => sum + q.marks, 0)) * 100),
+          detailedAnswers: questions.map((q, index) => {
+            const userAnswer = answers.find((a) => a.questionId === q.id)
+            const selectedAnswer = userAnswer?.selectedAnswer?.[0] || userAnswer?.textAnswer || "Not answered"
+            return {
+              questionNumber: index + 1,
+              question: q.question,
+              correctAnswer: q.correctAnswer,
+              userAnswer: selectedAnswer,
+              isCorrect: selectedAnswer === q.correctAnswer,
+              marks: q.marks,
+              earnedMarks: selectedAnswer === q.correctAnswer ? q.marks : 0,
+            }
+          }),
+        })
+
+        toast({
+          title: "Admin Exam Completed",
+          description: `Score: ${score}/${questions.reduce((sum, q) => sum + q.marks, 0)} - Check console for detailed results`,
+        })
+
+        // Store result for admin results page
+        sessionStorage.setItem(
+          "assessmentResult",
+          JSON.stringify({
+            ...result,
+            isAdminExam: true,
+          }),
+        )
+
+        // Redirect to results page
+        router.push("/results")
+      }
     } catch (error) {
       console.error("[v0] Error submitting admin exam:", error)
       toast({
@@ -152,12 +282,26 @@ export function AdminExamInterface() {
 
   const calculateScore = () => {
     return questions.reduce((score, question) => {
-      const userAnswer = answers[question.id]
-      if (userAnswer === question.correct_answer) {
+      const userAnswer = answers.find((a) => a.questionId === question.id)
+      const selectedAnswer = userAnswer?.selectedAnswer?.[0] || userAnswer?.textAnswer
+      if (selectedAnswer === question.correctAnswer) {
         return score + question.marks
       }
       return score
     }, 0)
+  }
+
+  const getAvailableOptions = (question: Question) => {
+    const options = [
+      { key: "A" as const, text: question.optionA },
+      { key: "B" as const, text: question.optionB },
+      { key: "C" as const, text: question.optionC },
+      { key: "D" as const, text: question.optionD },
+      { key: "E" as const, text: question.optionE },
+      { key: "F" as const, text: question.optionF },
+    ]
+
+    return options.filter((option) => option.text && option.text.trim() !== "")
   }
 
   const formatTime = (seconds: number) => {
@@ -214,6 +358,17 @@ export function AdminExamInterface() {
                 <li>• Console shows correct answers for each question</li>
                 <li>• All questions and answers logged on start</li>
                 <li>• Answer validation shown in real-time</li>
+                <li>• Results saved to normal exam database</li>
+              </ul>
+            </div>
+
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <h3 className="font-semibold text-green-800 mb-2">Console Instructions:</h3>
+              <ul className="text-sm text-green-700 space-y-1">
+                <li>• Press F12 to open Developer Console</li>
+                <li>• All correct answers will be displayed</li>
+                <li>• Real-time answer validation available</li>
+                <li>• Perfect for testing and question review</li>
               </ul>
             </div>
 
@@ -245,7 +400,11 @@ export function AdminExamInterface() {
   }
 
   const currentQuestion = questions[currentQuestionIndex]
+  const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
   const progress = ((currentQuestionIndex + 1) / questions.length) * 100
+  const isMultipleChoice = currentQuestion?.questionType === "MSQ"
+  const isNATQuestion = currentQuestion?.questionType === "NAT"
+  const availableOptions = getAvailableOptions(currentQuestion)
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -255,7 +414,7 @@ export function AdminExamInterface() {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
               <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                ADMIN MODE
+                ADMIN MODE - CONSOLE ENABLED
               </Badge>
               <span className="text-sm text-gray-600">
                 Question {currentQuestionIndex + 1} of {questions.length}
@@ -292,26 +451,93 @@ export function AdminExamInterface() {
                   <Badge variant="secondary" className="ml-2">
                     {currentQuestion.marks} {currentQuestion.marks === 1 ? "mark" : "marks"}
                   </Badge>
+                  {isNATQuestion ? (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      Fill in the blank
+                    </Badge>
+                  ) : isMultipleChoice ? (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      Multiple Select
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      Single Choice
+                    </Badge>
+                  )}
                 </CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="text-gray-800 leading-relaxed">{currentQuestion.question}</div>
+              <div className="bg-gray-50 p-6 rounded-lg">
+                <div className="text-lg leading-relaxed space-y-2">
+                  <p className="font-semibold text-gray-900">
+                    {currentQuestionIndex + 1}. {currentQuestion.question}
+                  </p>
+                  {!isNATQuestion && (
+                    <>
+                      {availableOptions.map((option) => (
+                        <p key={option.key} className="ml-4">
+                          {option.key}) {option.text}
+                        </p>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
 
-              <RadioGroup
-                value={answers[currentQuestion.id] || ""}
-                onValueChange={handleAnswerChange}
-                className="space-y-3"
-              >
-                {currentQuestion.options.map((option, index) => (
-                  <div key={index} className="flex items-center space-x-3 p-3 rounded-lg border hover:bg-gray-50">
-                    <RadioGroupItem value={option} id={`option-${index}`} />
-                    <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer">
-                      {option}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
+              <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                <p className="text-green-800 text-sm">
+                  <strong>Console Hint:</strong> Check browser console (F12) for the correct answer to this question.
+                </p>
+              </div>
+
+              {isNATQuestion ? (
+                <div className="space-y-4">
+                  <label className="block text-sm font-medium text-gray-700">Your Answer:</label>
+                  <input
+                    type="text"
+                    value={currentAnswer?.textAnswer || ""}
+                    onChange={(e) => handleTextAnswerChange(e.target.value)}
+                    placeholder="Type your answer here..."
+                    className="w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {availableOptions.map((option) => {
+                    const isSelected = currentAnswer?.selectedAnswer?.includes(option.key) || false
+
+                    return (
+                      <div
+                        key={option.key}
+                        onClick={() => handleAnswerChange(option.key)}
+                        className={`flex items-center gap-3 p-4 rounded-lg border transition-all cursor-pointer hover:bg-blue-50 ${
+                          isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          {isMultipleChoice ? (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                          ) : (
+                            <input
+                              type="radio"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
+                            />
+                          )}
+                        </div>
+                        <span className="font-medium text-lg text-gray-900">{option.key}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
               <div className="flex justify-between pt-4">
                 <Button
@@ -343,23 +569,29 @@ export function AdminExamInterface() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-5 gap-2">
-                {questions.map((_, index) => (
-                  <Button
-                    key={index}
-                    onClick={() => goToQuestion(index)}
-                    variant={currentQuestionIndex === index ? "default" : "outline"}
-                    size="sm"
-                    className={`h-8 w-8 p-0 ${
-                      answers[questions[index].id]
-                        ? currentQuestionIndex === index
-                          ? "bg-green-600 hover:bg-green-700"
-                          : "bg-green-100 text-green-800 border-green-300"
-                        : ""
-                    }`}
-                  >
-                    {index + 1}
-                  </Button>
-                ))}
+                {questions.map((_, index) => {
+                  const hasAnswer =
+                    answers[index]?.selectedAnswer?.length > 0 ||
+                    (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
+
+                  return (
+                    <Button
+                      key={index}
+                      onClick={() => goToQuestion(index)}
+                      variant={currentQuestionIndex === index ? "default" : "outline"}
+                      size="sm"
+                      className={`h-8 w-8 p-0 ${
+                        hasAnswer
+                          ? currentQuestionIndex === index
+                            ? "bg-green-600 hover:bg-green-700"
+                            : "bg-green-100 text-green-800 border-green-300"
+                          : ""
+                      }`}
+                    >
+                      {index + 1}
+                    </Button>
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
@@ -372,12 +604,22 @@ export function AdminExamInterface() {
               <div className="flex justify-between text-sm">
                 <span>Answered:</span>
                 <span className="font-semibold">
-                  {Object.keys(answers).length}/{questions.length}
+                  {
+                    answers.filter(
+                      (a) => a.selectedAnswer.length > 0 || (a.textAnswer && a.textAnswer.trim().length > 0),
+                    ).length
+                  }
+                  /{questions.length}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span>Remaining:</span>
-                <span className="font-semibold">{questions.length - Object.keys(answers).length}</span>
+                <span className="font-semibold">
+                  {questions.length -
+                    answers.filter(
+                      (a) => a.selectedAnswer.length > 0 || (a.textAnswer && a.textAnswer.trim().length > 0),
+                    ).length}
+                </span>
               </div>
               <div className="pt-2">
                 <Button onClick={handleSubmit} className="w-full bg-blue-600 hover:bg-blue-700">

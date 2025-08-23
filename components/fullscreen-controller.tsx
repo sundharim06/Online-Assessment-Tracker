@@ -54,15 +54,14 @@ export function FullscreenController({
     if (!newIsFullscreen && enabled && preventExit) {
       setExitAttempts((prev) => prev + 1)
       setShowExitWarning(true)
-      onViolation?.("Unauthorized fullscreen exit attempt")
+      onViolation?.(`Fullscreen exit attempt ${exitAttempts + 1}`)
 
-      // Auto re-enter fullscreen after a short delay
       setTimeout(() => {
         enterFullscreen()
         setShowExitWarning(false)
-      }, 2000)
+      }, 500)
     }
-  }, [enabled, preventExit, onFullscreenChange, onViolation])
+  }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts])
 
   // Enter fullscreen mode
   const enterFullscreen = useCallback(async () => {
@@ -119,17 +118,17 @@ export function FullscreenController({
       if (event.key === "Escape" && isFullscreen && preventExit) {
         event.preventDefault()
         event.stopPropagation()
-        onViolation?.("Escape key blocked in protected mode")
+        event.stopImmediatePropagation()
 
-        // Show warning and re-enter fullscreen
-        setShowExitWarning(true)
+        setExitAttempts((prev) => prev + 1)
+        onViolation?.(`Escape key violation - Attempt ${exitAttempts + 1}`)
+
         setTimeout(() => {
           enterFullscreen()
-          setShowExitWarning(false)
-        }, 1500)
+        }, 100)
       }
     },
-    [isFullscreen, preventExit, onViolation, enterFullscreen],
+    [isFullscreen, preventExit, onViolation, enterFullscreen, exitAttempts],
   )
 
   // Monitor window focus to detect Alt+Tab attempts
@@ -194,7 +193,6 @@ export function FullscreenController({
 
   return (
     <>
-      {/* Exit Warning Modal */}
       {showExitWarning && (
         <div className="fixed inset-0 bg-red-900 bg-opacity-90 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 max-w-md w-full border-2 border-red-500 shadow-2xl">
@@ -206,7 +204,7 @@ export function FullscreenController({
               </p>
               <div className="bg-red-50 p-3 rounded border border-red-200">
                 <p className="text-sm text-red-600">
-                  <strong>Attempts:</strong> {exitAttempts}
+                  <strong>Exit Attempts:</strong> {exitAttempts}
                 </p>
                 <p className="text-sm text-red-600">Returning to fullscreen mode automatically...</p>
               </div>

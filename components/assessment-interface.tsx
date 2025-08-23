@@ -39,6 +39,7 @@ export function AssessmentInterface() {
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
   const [isExamTerminated, setIsExamTerminated] = useState(false)
   const [terminationReason, setTerminationReason] = useState<string>("")
+  const [showAdminAccess, setShowAdminAccess] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -394,6 +395,59 @@ export function AssessmentInterface() {
     }
   }, [examStarted, isLoading, questions.length, examConfig])
 
+  useEffect(() => {
+    if (isProtectedMode) {
+      // Block console access in protected mode
+      const originalConsole = { ...console }
+
+      // Override console methods to block them
+      console.log = () => {}
+      console.warn = () => {}
+      console.error = () => {}
+      console.info = () => {}
+      console.debug = () => {}
+      console.table = () => {}
+      console.group = () => {}
+      console.groupEnd = () => {}
+      console.clear = () => {}
+
+      return () => {
+        // Restore console when protection is disabled
+        Object.assign(console, originalConsole)
+      }
+    }
+  }, [isProtectedMode])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!examStarted && event.ctrlKey && event.shiftKey && event.key === "A") {
+        event.preventDefault()
+        setShowAdminAccess(true)
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [examStarted])
+
+  const handleAdminExamAccess = () => {
+    // Exit fullscreen first
+    if (document.fullscreenElement) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      } else if ((document as any).webkitExitFullscreen) {
+        ;(document as any).webkitExitFullscreen()
+      } else if ((document as any).mozCancelFullScreen) {
+        ;(document as any).mozCancelFullScreen()
+      } else if ((document as any).msExitFullscreen) {
+        ;(document as any).msExitFullscreen()
+      }
+    }
+
+    // Navigate to admin exam
+    router.push("/admin/exam")
+  }
+
   if (isRefreshDetected) {
     return (
       <div className="min-h-screen bg-red-50 flex items-center justify-center p-4">
@@ -610,9 +664,40 @@ export function AssessmentInterface() {
                 <Play className="h-5 w-5" />
                 Start Protected Assessment
               </Button>
+
+              {/* Admin Access Hint */}
+              <p className="text-xs text-gray-400 mt-2">Press Ctrl+Shift+A for instructor access</p>
             </div>
           </CardContent>
         </Card>
+
+        {showAdminAccess && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md border-blue-300 shadow-2xl">
+              <CardHeader className="bg-blue-50 border-b border-blue-200">
+                <CardTitle className="text-xl text-blue-800">Instructor Access</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                <p className="text-gray-700">Access the non-protected exam mode with console answers visible?</p>
+
+                <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                  <p className="text-yellow-800 text-sm">
+                    <strong>Note:</strong> This will exit fullscreen and allow console access with answer keys.
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button onClick={handleAdminExamAccess} className="flex-1 bg-blue-600 hover:bg-blue-700">
+                    Access Non-Protected Exam
+                  </Button>
+                  <Button onClick={() => setShowAdminAccess(false)} variant="outline" className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     )
   }

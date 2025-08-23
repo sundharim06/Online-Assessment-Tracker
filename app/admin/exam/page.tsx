@@ -16,7 +16,7 @@ export default function AdminExamPage() {
   const { toast } = useToast()
 
   const handleLogin = () => {
-    if (password === "admin123") {
+    if (password === "ennakuterla") {
       setIsAuthenticated(true)
       toast({
         title: "Admin Access Granted",

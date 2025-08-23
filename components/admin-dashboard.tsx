@@ -390,7 +390,7 @@ export function AdminDashboard() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-500">Default password: admin123</p>
+              <p className="text-xs text-gray-500">Default password: ennakuterla</p>
             </div>
             <Button onClick={handleLogin} className="w-full bg-purple-600 hover:bg-purple-700">
               Login to Dashboard

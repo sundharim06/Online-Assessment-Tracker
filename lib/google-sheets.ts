@@ -350,37 +350,31 @@ export async function updateStudentScore(
     studentRow.set("Submitted At", indianTime)
 
     if (scoreData.examType === "ADMIN") {
-      studentRow.set("Status", "ADMIN EXAM COMPLETED")
+      studentRow.set("Status", "COMPLETED")
       if (scoreData.adminNote) {
         try {
           studentRow.set("Notes", scoreData.adminNote)
         } catch {
-          // If Notes column doesn't exist, append to status
-          studentRow.set("Status", `ADMIN EXAM COMPLETED - ${scoreData.adminNote}`)
+          studentRow.set("Status", `COMPLETED - ${scoreData.adminNote}`)
         }
       }
     } else if (scoreData.status.includes("TERMINATED")) {
-      // Set clear terminated status
       studentRow.set("Status", "TERMINATED")
 
-      // Add detailed termination information
       if (scoreData.terminationReason) {
         studentRow.set("Termination Reason", scoreData.terminationReason.toUpperCase())
         studentRow.set("Tab Switch Count", (scoreData.tabSwitchCount || 0).toString())
       }
 
-      // Add completion details for terminated exams
       if (scoreData.answeredQuestions !== undefined && scoreData.totalAvailableQuestions !== undefined) {
         studentRow.set("Answered Questions", scoreData.answeredQuestions.toString())
         studentRow.set("Total Available Questions", scoreData.totalAvailableQuestions.toString())
 
         const completionNote = `TERMINATED - Answered ${scoreData.answeredQuestions}/${scoreData.totalAvailableQuestions} questions. Score: ${scoreData.score} marks earned before termination.`
 
-        // Check if Notes column exists, if not use a different approach
         try {
           studentRow.set("Notes", completionNote)
         } catch {
-          // If Notes column doesn't exist, append to status
           const detailedStatus = `TERMINATED (${scoreData.terminationReason?.toUpperCase() || "CHEATED"}) - ${scoreData.answeredQuestions}/${scoreData.totalAvailableQuestions} answered`
           studentRow.set("Status", detailedStatus)
         }

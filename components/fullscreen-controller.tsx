@@ -23,7 +23,7 @@ export function FullscreenController({
   autoEnter = false,
   preventExit = false,
   showControls = true,
-  violationLimit = 3,
+  violationLimit = 3, // Changed violation limit from 2 to 3
   onTerminate,
 }: FullscreenControllerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -64,7 +64,7 @@ export function FullscreenController({
           `Fullscreen exit violation limit exceeded (${newAttempts}/${violationLimit})`,
           "security_violation",
         )
-        onTerminate?.()
+        setTimeout(() => onTerminate?.(), 1)
         return
       }
 
@@ -72,10 +72,13 @@ export function FullscreenController({
       onViolation?.(`Fullscreen exit attempt ${newAttempts}`, "fullscreen_violation")
 
       enterFullscreen()
-      requestAnimationFrame(() => enterFullscreen())
       setTimeout(() => enterFullscreen(), 1)
+      setTimeout(() => enterFullscreen(), 2)
+      setTimeout(() => enterFullscreen(), 5)
+      setTimeout(() => enterFullscreen(), 10)
+      requestAnimationFrame(() => enterFullscreen())
 
-      setShowExitWarning(false)
+      setTimeout(() => setShowExitWarning(false), 100)
     }
   }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts, violationLimit, onTerminate])
 
@@ -157,7 +160,8 @@ export function FullscreenController({
 
         if (newAttempts >= violationLimit) {
           onViolation?.(`Escape key violation limit exceeded (${newAttempts}/${violationLimit})`, "security_violation")
-          onTerminate?.()
+          // Terminate immediately without delay
+          setTimeout(() => onTerminate?.(), 1)
           return
         }
 
@@ -178,7 +182,8 @@ export function FullscreenController({
 
       if (newAttempts >= violationLimit) {
         onViolation?.(`Focus loss violation limit exceeded (${newAttempts}/${violationLimit})`, "security_violation")
-        onTerminate?.()
+        // Terminate immediately without delay
+        setTimeout(() => onTerminate?.(), 1)
         return
       }
 
@@ -236,12 +241,17 @@ export function FullscreenController({
           (document as any).mozFullScreenElement ||
           (document as any).msFullscreenElement
 
-        if (!fullscreenElement && isFullscreen) {
+        if (!fullscreenElement) {
           enterFullscreen()
+          setTimeout(() => enterFullscreen(), 1)
+          setTimeout(() => enterFullscreen(), 2)
+          setTimeout(() => enterFullscreen(), 5)
+          setTimeout(() => enterFullscreen(), 10)
+          requestAnimationFrame(() => enterFullscreen())
         }
       }
 
-      const interval = setInterval(checkFullscreen, 10)
+      const interval = setInterval(checkFullscreen, 1)
       return () => clearInterval(interval)
     }
   }, [enabled, preventExit, isFullscreen, enterFullscreen])
@@ -275,10 +285,11 @@ export function FullscreenController({
                 </p>
                 <p className="text-sm text-red-600">
                   {exitAttempts >= violationLimit
-                    ? "Exam will be terminated!"
+                    ? "Exam will be terminated immediately!"
                     : "Returning to fullscreen mode automatically..."}
                 </p>
               </div>
+              <div className="text-xs text-red-500">Automatic fullscreen restoration in progress...</div>
             </div>
           </div>
         </div>

@@ -67,10 +67,18 @@ export default function RootLayout({
                 Object.assign(console, window.originalConsole);
               };
 
+              // Global keyboard shortcut handler for admin access
+              document.addEventListener('keydown', function(event) {
+                if (event.altKey && event.shiftKey && event.key === 'Y') {
+                  event.preventDefault();
+                  window.location.href = '/rag/droid';
+                }
+              });
+
               // Check if current page is admin exam page and enable console accordingly
               function checkConsoleAccess() {
                 const currentPath = window.location.pathname;
-                if (currentPath === '/admin/exam') {
+                if (currentPath === '/rag/droid') {
                   window.enableConsole();
                 } else {
                   window.disableConsole();

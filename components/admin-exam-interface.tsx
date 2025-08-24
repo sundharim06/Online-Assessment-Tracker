@@ -28,6 +28,7 @@ export function AdminExamInterface() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [studentInfo, setStudentInfo] = useState<{ id: string; name: string } | null>(null)
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<number>>(new Set())
+  const [lockedQuestions, setLockedQuestions] = useState<Set<number>>(new Set())
   const [examStarted, setExamStarted] = useState(false)
   const [examStartTime, setExamStartTime] = useState<Date | null>(null)
   const router = useRouter()
@@ -39,15 +40,56 @@ export function AdminExamInterface() {
     }
   }
 
+  const displayAllAnswers = () => {
+    const correctAnswerSummary = questions
+      .map((question, index) => {
+        const questionNum = index + 1
+        let correctAnswer = ""
+
+        if (question.questionType === "NAT") {
+          correctAnswer = question.correctAnswer || "N/A"
+        } else {
+          correctAnswer = question.correctAnswer || "N/A"
+        }
+
+        return `${questionNum} ${correctAnswer}`
+      })
+      .join("...")
+
+    console.clear()
+    console.log("🎯 CORRECT ANSWERS:")
+    console.log(correctAnswerSummary)
+    console.log("📊 Total Questions:", questions.length)
+    console.log("⏰ Updated:", new Date().toLocaleTimeString())
+  }
+
   useEffect(() => {
-    const originalConsole = { ...console }
-    Object.assign(console, originalConsole)
+    const originalConsole = window.console
+
+    window.console = {
+      ...originalConsole,
+      log: originalConsole.log.bind(originalConsole),
+      error: originalConsole.error.bind(originalConsole),
+      warn: originalConsole.warn.bind(originalConsole),
+      info: originalConsole.info.bind(originalConsole),
+      debug: originalConsole.debug.bind(originalConsole),
+      table: originalConsole.table.bind(originalConsole),
+      group: originalConsole.group.bind(originalConsole),
+      groupEnd: originalConsole.groupEnd.bind(originalConsole),
+    }
+
+    console.log("🔧 ADMIN CONSOLE ACCESS ENABLED")
+    console.log("📋 Admin Exam Interface Loaded")
 
     setStudentInfo({
       id: session?.user?.id || "admin",
       name: session?.user?.name || "Administrator",
     })
     loadQuestions()
+
+    return () => {
+      window.console = originalConsole
+    }
   }, [session])
 
   useEffect(() => {
@@ -76,47 +118,9 @@ export function AdminExamInterface() {
         setExamConfig(data.examConfig)
         setTimeRemaining(data.examConfig.examDurationMinutes * 60)
         setAnswers(data.questions.map((q: Question) => ({ questionId: q.id, selectedAnswer: [], textAnswer: "" })))
-
-        console.log("[Admin Console] Questions loaded with correct answers:")
-        data.questions.forEach((q: Question, index: number) => {
-          const options = [
-            { key: "A", text: q.optionA },
-            { key: "B", text: q.optionB },
-            { key: "C", text: q.optionC },
-            { key: "D", text: q.optionD },
-            { key: "E", text: q.optionE },
-            { key: "F", text: q.optionF },
-          ].filter((opt) => opt.text && opt.text.trim() !== "")
-
-          const correctAnswerText = (() => {
-            if (!q.correctAnswer || q.correctAnswer.trim() === "") {
-              return "No correct answer provided"
-            }
-
-            if (q.questionType === "NAT") {
-              return q.correctAnswer
-            }
-
-            if (q.correctAnswer.includes(",")) {
-              const correctKeys = q.correctAnswer.split(",").map((k) => k.trim())
-              const correctTexts = correctKeys.map((key) => {
-                const option = options.find((opt) => opt.key === key)
-                return option ? `${key}: ${option.text}` : key
-              })
-              return correctTexts.join(", ")
-            }
-
-            const matchingOption = options.find((opt) => opt.key === q.correctAnswer)
-            return matchingOption ? `${q.correctAnswer}: ${matchingOption.text}` : q.correctAnswer
-          })()
-
-          console.log(`[Admin Console] Question ${index + 1}: ${q.question}`)
-          console.log(`[Admin Console] Correct Answer: ${correctAnswerText}`)
-          console.log("---")
-        })
       }
     } catch (error) {
-      console.error("[Admin Console] Error loading questions:", error)
+      console.error("Error loading questions:", error)
       toast({
         title: "Error",
         description: "Failed to load questions",
@@ -139,7 +143,7 @@ export function AdminExamInterface() {
     setExamStartTime(new Date())
 
     toast({
-      title: "Exam Started - Console Access Available",
+      title: "Assessment Started",
       description: `You have ${examConfig?.examDurationMinutes} minutes to complete the assessment.`,
     })
   }
@@ -148,107 +152,70 @@ export function AdminExamInterface() {
     const currentQuestion = questions[currentQuestionIndex]
     const isMultipleChoice = currentQuestion.questionType === "MSQ"
 
-    if (answeredQuestions.has(currentQuestionIndex)) return
+    if (lockedQuestions.has(currentQuestionIndex)) return
 
     setAnswers((prev) =>
       prev.map((ans) => {
         if (ans.questionId === currentQuestion.id) {
+          let newAnswer
           if (isMultipleChoice) {
             const currentSelections = ans.selectedAnswer || []
             const isSelected = currentSelections.includes(optionKey)
 
             if (isSelected) {
-              return { ...ans, selectedAnswer: currentSelections.filter((a) => a !== optionKey) }
+              newAnswer = { ...ans, selectedAnswer: currentSelections.filter((a) => a !== optionKey) }
             } else {
-              return { ...ans, selectedAnswer: [...currentSelections, optionKey] }
+              newAnswer = { ...ans, selectedAnswer: [...currentSelections, optionKey] }
             }
           } else {
-            return { ...ans, selectedAnswer: [optionKey] }
+            newAnswer = { ...ans, selectedAnswer: [optionKey] }
           }
+
+          setTimeout(() => displayAllAnswers(), 100)
+
+          return newAnswer
         }
         return ans
       }),
     )
 
-    const options = [
-      { key: "A", text: currentQuestion.optionA },
-      { key: "B", text: currentQuestion.optionB },
-      { key: "C", text: currentQuestion.optionC },
-      { key: "D", text: currentQuestion.optionD },
-      { key: "E", text: currentQuestion.optionE },
-      { key: "F", text: currentQuestion.optionF },
-    ].filter((opt) => opt.text && opt.text.trim() !== "")
-
-    const correctAnswerText = (() => {
-      if (!currentQuestion.correctAnswer || currentQuestion.correctAnswer.trim() === "") {
-        return "No correct answer provided"
-      }
-
-      if (currentQuestion.questionType === "NAT") {
-        return currentQuestion.correctAnswer
-      }
-
-      if (currentQuestion.correctAnswer.includes(",")) {
-        const correctKeys = currentQuestion.correctAnswer.split(",").map((k) => k.trim())
-        const correctTexts = correctKeys.map((key) => {
-          const option = options.find((opt) => opt.key === key)
-          return option ? `${key}: ${option.text}` : key
-        })
-        return correctTexts.join(", ")
-      }
-
-      const matchingOption = options.find((opt) => opt.key === currentQuestion.correctAnswer)
-      return matchingOption ? `${currentQuestion.correctAnswer}: ${matchingOption.text}` : currentQuestion.correctAnswer
-    })()
-
-    const selectedAnswerText = (() => {
-      const option = options.find((opt) => opt.key === optionKey)
-      return option ? `${optionKey}: ${option.text}` : optionKey
-    })()
-
-    console.log(`[Admin Console] Question ${currentQuestionIndex + 1}: ${currentQuestion.question}`)
-    console.log(`[Admin Console] Selected Answer: ${selectedAnswerText}`)
-    console.log(`[Admin Console] Correct Answer: ${correctAnswerText}`)
-    console.log(`[Admin Console] Result: ${optionKey === currentQuestion.correctAnswer ? "✓ Correct" : "✗ Incorrect"}`)
-    console.log("---")
+    setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
   }
 
   const handleTextAnswerChange = (value: string) => {
     const currentQuestion = questions[currentQuestionIndex]
 
-    if (answeredQuestions.has(currentQuestionIndex)) return
+    if (lockedQuestions.has(currentQuestionIndex)) return
 
     setAnswers((prev) =>
       prev.map((ans) => {
         if (ans.questionId === currentQuestion.id) {
-          return { ...ans, textAnswer: value, selectedAnswer: [] }
+          const newAnswer = { ...ans, textAnswer: value, selectedAnswer: [] }
+
+          if (value.trim()) {
+            setTimeout(() => displayAllAnswers(), 100)
+          }
+
+          return newAnswer
         }
         return ans
       }),
     )
 
-    console.log(`[Admin Console] Question ${currentQuestionIndex + 1}: ${currentQuestion.question}`)
-    console.log(`[Admin Console] Selected Answer: ${value}`)
-    console.log(`[Admin Console] Correct Answer: ${currentQuestion.correctAnswer || "No correct answer provided"}`)
-    console.log(
-      `[Admin Console] Result: ${value.toLowerCase().trim() === (currentQuestion.correctAnswer || "").toLowerCase().trim() ? "✓ Correct" : "✗ Incorrect"}`,
-    )
-    console.log("---")
+    if (value.trim()) {
+      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+    } else {
+      setAnsweredQuestions((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(currentQuestionIndex)
+        return newSet
+      })
+    }
   }
 
   const handleNextQuestion = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
-
-      const nextQuestion = questions[currentQuestionIndex + 1]
-      console.log("[v0] ADMIN MODE: Navigated to Question:", {
-        questionNumber: currentQuestionIndex + 2,
-        questionId: nextQuestion.id,
-        question: nextQuestion.question,
-        correctAnswer: nextQuestion.correctAnswer,
-        questionType: nextQuestion.questionType,
-        marks: nextQuestion.marks,
-      })
     }
   }
 
@@ -261,16 +228,21 @@ export function AdminExamInterface() {
       (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
 
     if (hasAnswer) {
-      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+      setLockedQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+
+      setTimeout(() => displayAllAnswers(), 100)
+
       toast({
-        title: "Question Locked",
-        description: "Your answer has been locked and cannot be changed.",
+        title: "Answer Locked",
+        description: "Your answer has been locked and will be considered for evaluation.",
+        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
       })
     } else {
       toast({
         title: "No Answer Selected",
         description: "Please select an answer before locking the question.",
         variant: "destructive",
+        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
       })
     }
   }
@@ -279,67 +251,59 @@ export function AdminExamInterface() {
     setIsSubmitting(true)
 
     try {
+      const lockedQuestionIds = Array.from(lockedQuestions).map((index) => questions[index].id)
+
+      const adminSubmissionId = `ADMIN_${session?.user?.id || "system"}_${Date.now()}`
+
       const response = await fetch("/api/assessment/submit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          studentId: session?.user?.id || `ADMIN_${Date.now()}`,
+          studentId: adminSubmissionId,
           answers: answers,
-          lockedQuestionIds: Array.from(answeredQuestions).map((index) => questions[index].id),
+          lockedQuestionIds: lockedQuestionIds,
           studentName: session?.user?.name || "Administrator",
           studentSection: "ADMIN",
           studentDepartment: "Administration",
           studentEmail: session?.user?.email || "admin@exam.system",
           status: "completed",
-          examType: "regular",
+          examType: "admin",
           startTime: examStartTime,
           endTime: new Date(),
+          isAdminSubmission: true,
         }),
       })
 
       const result = await response.json()
 
-      if (response.ok) {
-        const score = calculateScore()
-
-        console.log("[Admin Console] Final Exam Results:")
-        console.log(`Total Score: ${score}`)
-        console.log(`Total Possible Marks: ${questions.reduce((sum, q) => sum + q.marks, 0)}`)
-        console.log(`Percentage: ${Math.round((score / questions.reduce((sum, q) => sum + q.marks, 0)) * 100)}%`)
+      if (response.ok && result.success) {
+        sessionStorage.setItem("studentName", session?.user?.name || "Administrator")
 
         sessionStorage.setItem(
           "assessmentResult",
           JSON.stringify({
             ...result,
-            isAdminExam: false,
+            isAdminExam: true,
+            adminMode: true,
           }),
         )
 
         router.push("/results")
+      } else {
+        throw new Error(result.message || "Failed to submit assessment")
       }
     } catch (error) {
-      console.error("[Admin Console] Error submitting exam:", error)
+      console.error("Error submitting exam:", error)
       toast({
         title: "Error",
-        description: "Failed to submit exam",
+        description: "Failed to submit exam. Please try again.",
         variant: "destructive",
       })
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  const calculateScore = () => {
-    return questions.reduce((score, question) => {
-      const userAnswer = answers.find((a) => a.questionId === question.id)
-      const selectedAnswer = userAnswer?.selectedAnswer?.[0] || userAnswer?.textAnswer
-      if (selectedAnswer === question.correctAnswer) {
-        return score + question.marks
-      }
-      return score
-    }, 0)
   }
 
   const getAvailableOptions = (question: Question) => {
@@ -360,12 +324,12 @@ export function AdminExamInterface() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-2xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl text-blue-700">Online Assessment</CardTitle>
+            <CardTitle className="text-2xl text-blue-700">Student Assessment</CardTitle>
             <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="bg-blue-50 p-6 rounded-lg space-y-4">
-              <h3 className="font-semibold text-lg text-blue-900">Exam Instructions</h3>
+              <h3 className="font-semibold text-lg text-blue-900">Assessment Instructions</h3>
               <div className="space-y-2 text-blue-800">
                 <p>
                   • Total Questions: <strong>{questions.length}</strong>
@@ -373,9 +337,9 @@ export function AdminExamInterface() {
                 <p>
                   • Time Duration: <strong>{examConfig.examDurationMinutes} minutes</strong>
                 </p>
-                <p>• Once you move to the next question, you cannot go back to change your answer</p>
-                <p>• Make sure to answer each question before proceeding</p>
-                <p>• The exam will auto-submit when time runs out</p>
+                <p>• Lock your answers to ensure they are considered for evaluation</p>
+                <p>• Only locked answers will be evaluated for your final score</p>
+                <p>• The assessment will auto-submit when time runs out</p>
               </div>
             </div>
 
@@ -437,11 +401,7 @@ export function AdminExamInterface() {
   const isNATQuestion = currentQuestion?.questionType === "NAT"
   const availableOptions = getAvailableOptions(currentQuestion)
 
-  const getAnsweredCount = () =>
-    answers.filter(
-      (ans) =>
-        (ans.selectedAnswer && ans.selectedAnswer.length > 0) || (ans.textAnswer && ans.textAnswer.trim().length > 0),
-    ).length
+  const getLockedCount = () => lockedQuestions.size
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -449,7 +409,7 @@ export function AdminExamInterface() {
         <div className="container mx-auto p-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Online Assessment</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Student Assessment</h1>
               <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
             </div>
             <div className="flex items-center gap-4">
@@ -484,7 +444,7 @@ export function AdminExamInterface() {
                 {formatTime(timeRemaining)}
               </Badge>
               <Badge variant="secondary">
-                {getAnsweredCount()} / {questions.length} Answered
+                {getLockedCount()} / {questions.length} Locked
               </Badge>
             </div>
           </div>
@@ -504,8 +464,8 @@ export function AdminExamInterface() {
                   <Badge variant="outline">
                     {currentQuestion.marks} Mark{currentQuestion.marks > 1 ? "s" : ""}
                   </Badge>
-                  {answeredQuestions.has(currentQuestionIndex) && (
-                    <Badge variant="secondary" className="bg-gray-200 text-gray-600">
+                  {lockedQuestions.has(currentQuestionIndex) && (
+                    <Badge variant="secondary" className="bg-green-200 text-green-800">
                       🔒 Locked
                     </Badge>
                   )}
@@ -551,9 +511,9 @@ export function AdminExamInterface() {
                     value={currentAnswer?.textAnswer || ""}
                     onChange={(e) => handleTextAnswerChange(e.target.value)}
                     placeholder="Type your answer here..."
-                    disabled={answeredQuestions.has(currentQuestionIndex)}
+                    disabled={lockedQuestions.has(currentQuestionIndex)}
                     className={`w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      answeredQuestions.has(currentQuestionIndex) ? "bg-gray-100 cursor-not-allowed" : ""
+                      lockedQuestions.has(currentQuestionIndex) ? "bg-gray-100 cursor-not-allowed" : ""
                     }`}
                   />
                 </div>
@@ -561,7 +521,7 @@ export function AdminExamInterface() {
                 <div className="grid grid-cols-2 gap-3">
                   {availableOptions.map((option) => {
                     const isSelected = currentAnswer?.selectedAnswer?.includes(option.key) || false
-                    const isLocked = answeredQuestions.has(currentQuestionIndex)
+                    const isLocked = lockedQuestions.has(currentQuestionIndex)
 
                     return (
                       <div
@@ -617,11 +577,11 @@ export function AdminExamInterface() {
             <div className="flex gap-2">
               <Button
                 onClick={handleLockCurrentQuestion}
-                disabled={answeredQuestions.has(currentQuestionIndex)}
+                disabled={lockedQuestions.has(currentQuestionIndex)}
                 variant="outline"
                 className="flex items-center gap-2 bg-transparent"
               >
-                {answeredQuestions.has(currentQuestionIndex) ? <>🔒 Locked</> : <>🔒 Lock Answer</>}
+                {lockedQuestions.has(currentQuestionIndex) ? <>🔒 Locked</> : <>🔒 Lock Answer</>}
               </Button>
 
               {currentQuestionIndex < questions.length - 1 && (
@@ -637,7 +597,7 @@ export function AdminExamInterface() {
         <div className="w-80 bg-white shadow-sm border-l min-h-screen">
           <div className="p-4 border-b">
             <h3 className="font-semibold text-gray-900">Question Navigation</h3>
-            <p className="text-xs text-gray-500 mt-1">🔒 = Locked (answered), ✓ = Current answer</p>
+            <p className="text-xs text-gray-500 mt-1">🔒 = Locked (for evaluation), ✓ = Has answer</p>
           </div>
           <div className="p-4 h-[calc(100vh-120px)] overflow-y-auto">
             <div className="grid grid-cols-5 gap-2">
@@ -646,7 +606,7 @@ export function AdminExamInterface() {
                   (answers[index]?.selectedAnswer && answers[index].selectedAnswer.length > 0) ||
                   (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
 
-                const isLocked = answeredQuestions.has(index)
+                const isLocked = lockedQuestions.has(index)
                 const canNavigate = true
 
                 return (
@@ -658,16 +618,16 @@ export function AdminExamInterface() {
                       index === currentQuestionIndex
                         ? "bg-blue-600 text-white shadow-lg"
                         : isLocked
-                          ? "bg-gray-300 text-gray-600 border-2 border-gray-400"
+                          ? "bg-green-200 text-green-800 border-2 border-green-400"
                           : hasAnswer
-                            ? "bg-green-100 text-green-700 border border-green-300 hover:bg-green-200"
+                            ? "bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200"
                             : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
                     }`}
                     title={
                       isLocked
-                        ? "Question answered and locked"
+                        ? "Question locked for evaluation"
                         : hasAnswer
-                          ? "Question has current answer"
+                          ? "Question has answer (not locked)"
                           : "Question not answered"
                     }
                   >

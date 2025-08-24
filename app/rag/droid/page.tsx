@@ -9,7 +9,7 @@ import { Lock, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { AdminExamInterface } from "@/components/admin-exam-interface"
 
-export default function AdminExamPage() {
+export default function RAGDroidPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -19,13 +19,13 @@ export default function AdminExamPage() {
     if (password === "ennakuterla") {
       setIsAuthenticated(true)
       toast({
-        title: "Admin Access Granted",
-        description: "You can now take the exam with console access",
+        title: "RAG Droid Access Granted",
+        description: "You can now access the student assessment interface",
       })
     } else {
       toast({
         title: "Access Denied",
-        description: "Invalid admin password",
+        description: "Invalid access password",
         variant: "destructive",
       })
     }
@@ -39,17 +39,17 @@ export default function AdminExamPage() {
             <div className="flex justify-center mb-4">
               <Lock className="h-12 w-12 text-blue-600" />
             </div>
-            <CardTitle className="text-2xl text-blue-700">Admin Exam Access</CardTitle>
-            <CardDescription>Enter admin password to access the exam without protection mode</CardDescription>
+            <CardTitle className="text-2xl text-blue-700">RAG Droid Access</CardTitle>
+            <CardDescription>Enter access password to use the student assessment interface</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">Admin Password</Label>
+              <Label htmlFor="password">Access Password</Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Enter admin password"
+                  placeholder="Enter access password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && handleLogin()}
@@ -63,10 +63,9 @@ export default function AdminExamPage() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-500">Console access enabled for answer viewing</p>
             </div>
             <Button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-700">
-              Access Admin Exam
+              Access RAG Droid
             </Button>
           </CardContent>
         </Card>

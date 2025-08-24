@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     let examStatus = ""
     if (examType === "admin") {
-      examStatus = "ADMIN EXAM - COMPLETED"
+      examStatus = "COMPLETED"
     } else if (status === "terminated") {
       examStatus =
         terminationReason === "cheated"

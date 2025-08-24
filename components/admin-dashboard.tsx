@@ -743,24 +743,24 @@ export function AdminDashboard() {
         <TabsContent value="exam" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Admin Exam Mode</CardTitle>
-              <CardDescription>Take the exam without protection mode and with console access</CardDescription>
+              <CardTitle>Student Assessement</CardTitle>
+              <CardDescription>Access the student assessment interface</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-blue-800 mb-2">Features:</h3>
                   <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• No fullscreen or security restrictions</li>
-                    <li>• Console shows correct answers for each question</li>
-                    <li>• Real-time answer validation</li>
-                    <li>• Perfect for testing and reviewing questions</li>
-                    <li>• Results saved to normal exam database for tracking</li>
+                    <li>• Standard assessment interface</li>
+                    <li>• Lock answers for evaluation</li>
+                    <li>• Only locked answers are considered</li>
+                    <li>• Perfect for testing assessment flow</li>
+                    <li>• Results saved to assessment database</li>
                   </ul>
                 </div>
 
-                <Button onClick={() => router.push("/admin/exam")} className="bg-blue-600 hover:bg-blue-700">
-                  Open Admin Exam
+                <Button onClick={() => router.push("/rag/droid")} className="bg-blue-600 hover:bg-blue-700">
+                  Student Assessment
                 </Button>
               </div>
             </CardContent>

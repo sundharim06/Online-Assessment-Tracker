@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { signOut } from "next-auth/react"
 
 export function GlobalRefreshProtection() {
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     const checkForRefresh = () => {
@@ -41,7 +42,7 @@ export function GlobalRefreshProtection() {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const hasRegistered = sessionStorage.getItem("studentId") || sessionStorage.getItem("examStarted")
 
-      if (hasRegistered) {
+      if (hasRegistered && pathname !== "/results") {
         e.preventDefault()
         e.returnValue = "Are you sure you want to leave? This will end your exam session."
         return "Are you sure you want to leave? This will end your exam session."
@@ -53,7 +54,7 @@ export function GlobalRefreshProtection() {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload)
     }
-  }, [router])
+  }, [router, pathname])
 
   return null
 }

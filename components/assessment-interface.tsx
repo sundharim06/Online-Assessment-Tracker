@@ -20,7 +20,7 @@ interface StudentAnswer {
   textAnswer?: string
 }
 
-export function AssessmentInterface() {
+function AssessmentInterface() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [examConfig, setExamConfig] = useState<ExamConfig | null>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
@@ -41,6 +41,7 @@ export function AssessmentInterface() {
   const [isExamTerminated, setIsExamTerminated] = useState(false)
   const [terminationReason, setTerminationReason] = useState<string>("")
   const [showAdminAccess, setShowAdminAccess] = useState(false)
+  const [isRoutingToResults, setIsRoutingToResults] = useState(false) // Add routing state to prevent termination screen from showing
   const router = useRouter()
   const { toast } = useToast()
 
@@ -48,17 +49,16 @@ export function AssessmentInterface() {
     async (reason: string) => {
       if (!studentInfo) return
 
+      console.log("[v0] Background submission of terminated exam with reason:", reason)
       setIsSubmitting(true)
-      sessionStorage.removeItem("examInProgress")
-      sessionStorage.removeItem("examStarted")
+
+      const answeredOnly = answers.filter(
+        (answer) =>
+          (answer.selectedAnswer && answer.selectedAnswer.length > 0) ||
+          (answer.textAnswer && answer.textAnswer.trim().length > 0),
+      )
 
       try {
-        const answeredOnly = answers.filter(
-          (answer) =>
-            (answer.selectedAnswer && answer.selectedAnswer.length > 0) ||
-            (answer.textAnswer && answer.textAnswer.trim().length > 0),
-        )
-
         const lockedQuestionIds = Array.from(lockedQuestions)
           .map((index) => questions[index]?.id)
           .filter(Boolean)
@@ -71,7 +71,7 @@ export function AssessmentInterface() {
           body: JSON.stringify({
             studentId: Number.parseInt(studentInfo.id),
             answers: answeredOnly,
-            lockedQuestionIds, // Send locked question IDs for evaluation
+            lockedQuestionIds,
             studentName: studentInfo.name,
             studentSection: sessionStorage.getItem("studentSection") || "Unknown",
             studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
@@ -83,34 +83,33 @@ export function AssessmentInterface() {
         })
 
         const result = await response.json()
+        console.log("[v0] Background terminated exam submission response:", result)
 
         if (response.ok) {
-          sessionStorage.setItem(
-            "assessmentResult",
-            JSON.stringify({
-              ...result,
-              status: "terminated",
-              reason: reason,
-              answeredCount: answeredOnly.length,
-              totalQuestions: questions.length,
-            }),
-          )
-
-          setTimeout(() => {
-            router.push("/results")
-          }, 3000)
+          const updatedResult = {
+            score: answeredOnly.length,
+            totalQuestions: questions.length,
+            percentage: Math.round((answeredOnly.length / questions.length) * 100),
+            status: "terminated",
+            reason: reason,
+            answeredCount: answeredOnly.length,
+            studentName: studentInfo.name,
+            studentSection: sessionStorage.getItem("studentSection") || "Unknown",
+            studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
+            studentEmail: sessionStorage.getItem("studentEmail") || "",
+            terminationReason: reason,
+            tabSwitchCount: tabSwitchCount,
+            ...result,
+          }
+          sessionStorage.setItem("assessmentResult", JSON.stringify(updatedResult))
         }
       } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to submit terminated exam.",
-          variant: "destructive",
-        })
+        console.error("[v0] Failed to submit terminated exam:", error)
       } finally {
         setIsSubmitting(false)
       }
     },
-    [studentInfo, answers, router, toast, tabSwitchCount, questions.length, lockedQuestions],
+    [studentInfo, answers, questions, lockedQuestions, tabSwitchCount, toast],
   )
 
   const handleSecurityViolation = useCallback(
@@ -142,7 +141,7 @@ export function AssessmentInterface() {
     [violationCount, toast],
   )
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmitExam = useCallback(async () => {
     if (!studentInfo) return
 
     setIsSubmitting(true)
@@ -333,7 +332,7 @@ export function AssessmentInterface() {
             variant: "destructive",
             className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
           })
-          handleSubmit()
+          handleSubmitExam()
           return 0
         }
         return prev - 1
@@ -341,7 +340,7 @@ export function AssessmentInterface() {
     }, 1000)
 
     return () => clearTimeout(timer)
-  }, [timeRemaining, examStarted, questions.length, handleSubmit, toast])
+  }, [timeRemaining, examStarted, questions.length, handleSubmitExam, toast])
 
   useEffect(() => {
     if (!examStarted && !isLoading && questions.length > 0 && examConfig) {
@@ -367,6 +366,71 @@ export function AssessmentInterface() {
       enterInstructionsFullscreen()
     }
   }, [examStarted, isLoading, questions.length, examConfig])
+
+  useEffect(() => {
+    if (isExamTerminated && terminationReason) {
+      console.log("[v0] Exam terminated, routing immediately to results")
+
+      setIsRoutingToResults(true)
+
+      // Store result data immediately
+      if (studentInfo) {
+        const answeredOnly = answers.filter(
+          (answer) =>
+            (answer.selectedAnswer && answer.selectedAnswer.length > 0) ||
+            (answer.textAnswer && answer.textAnswer.trim().length > 0),
+        )
+
+        const resultData = {
+          score: answeredOnly.length,
+          totalQuestions: questions.length,
+          percentage: Math.round((answeredOnly.length / questions.length) * 100),
+          status: "terminated",
+          reason: terminationReason,
+          answeredCount: answeredOnly.length,
+          studentName: studentInfo.name,
+          studentSection: sessionStorage.getItem("studentSection") || "Unknown",
+          studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
+          studentEmail: sessionStorage.getItem("studentEmail") || "",
+          terminationReason: terminationReason,
+          tabSwitchCount: tabSwitchCount,
+        }
+
+        sessionStorage.setItem("assessmentResult", JSON.stringify(resultData))
+        sessionStorage.removeItem("examInProgress")
+        sessionStorage.removeItem("examStarted")
+      }
+
+      console.log("[v0] Forcing navigation to results page")
+
+      // Try router.push first
+      try {
+        router.push("/results")
+      } catch (error) {
+        console.log("[v0] Router.push failed, using window.location")
+      }
+
+      // Fallback to window.location after a tiny delay
+      setTimeout(() => {
+        console.log("[v0] Using window.location.href as fallback")
+        window.location.href = "/results"
+      }, 100)
+
+      // Submit data in background (non-blocking)
+      setTimeout(() => {
+        submitTerminatedExam(terminationReason)
+      }, 0)
+    }
+  }, [
+    isExamTerminated,
+    terminationReason,
+    studentInfo,
+    answers,
+    questions,
+    tabSwitchCount,
+    submitTerminatedExam,
+    router,
+  ])
 
   useEffect(() => {
     // Only block console if not on admin page
@@ -599,81 +663,27 @@ export function AssessmentInterface() {
     )
   }
 
-  const handleTerminatedSubmission = useCallback(async () => {
-    if (!studentInfo || !terminationReason) return
-
-    try {
-      const answeredOnly = answers.filter(
-        (answer) =>
-          (answer.selectedAnswer && answer.selectedAnswer.length > 0) ||
-          (answer.textAnswer && answer.textAnswer.trim().length > 0),
-      )
-
-      const lockedQuestionIds = Array.from(lockedQuestions)
-        .map((index) => questions[index]?.id)
-        .filter(Boolean)
-
-      const response = await fetch("/api/assessment/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          studentId: Number.parseInt(studentInfo.id),
-          answers: answeredOnly,
-          lockedQuestionIds,
-          studentName: studentInfo.name,
-          studentSection: sessionStorage.getItem("studentSection") || "Unknown",
-          studentDepartment: sessionStorage.getItem("studentDepartment") || "Unknown",
-          studentEmail: sessionStorage.getItem("studentEmail") || "",
-          status: "terminated",
-          terminationReason: terminationReason,
-          tabSwitchCount: tabSwitchCount,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        sessionStorage.setItem(
-          "assessmentResult",
-          JSON.stringify({
-            ...result,
-            status: "terminated",
-            reason: terminationReason,
-            answeredCount: answeredOnly.length,
-            totalQuestions: questions.length,
-          }),
-        )
-      }
-    } catch (error) {
-      console.error("Failed to submit terminated exam:", error)
-    }
-  }, [studentInfo, answers, terminationReason, tabSwitchCount, questions.length, lockedQuestions])
-
   const currentQuestion = questions[currentQuestionIndex]
   const isNATQuestion = currentQuestion?.questionType === "NAT"
   const availableOptions = getAvailableOptions(currentQuestion)
 
-  useEffect(() => {
-    if (isExamTerminated) {
-      const submitTerminated = async () => {
-        try {
-          await handleTerminatedSubmission()
-          setTimeout(() => {
-            router.push("/results")
-          }, 2000)
-        } catch (error) {
-          console.error("Failed to submit terminated exam:", error)
-          setTimeout(() => {
-            router.push("/results")
-          }, 3000)
-        }
-      }
-
-      submitTerminated()
-    }
-  }, [isExamTerminated, handleTerminatedSubmission, router])
+  if (isRoutingToResults) {
+    return (
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md border-blue-300 shadow-lg">
+          <CardHeader className="text-center bg-blue-100">
+            <div className="h-16 w-16 mx-auto mb-4 animate-spin">
+              <div className="h-full w-full border-4 border-blue-600 border-t-transparent rounded-full"></div>
+            </div>
+            <CardTitle className="text-2xl text-blue-700">Redirecting...</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            <p className="text-blue-800 text-center">Taking you to the results page...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   if (isRefreshDetected) {
     return (
@@ -801,6 +811,8 @@ export function AssessmentInterface() {
                 {terminationReason === "tab_switch" && "Multiple tab switches detected"}
                 {terminationReason === "security_violation" && "Critical security violation detected"}
                 {terminationReason === "time_up" && "Time limit exceeded"}
+                {terminationReason === "alt_tab_violation" && "Alt+Tab usage detected"}
+                {terminationReason === "fullscreen_violation_limit" && "Fullscreen violation limit exceeded"}
               </p>
             </div>
 
@@ -809,12 +821,6 @@ export function AssessmentInterface() {
               <p>• Your exam has been terminated for academic dishonesty</p>
               <p>• Only answered questions have been submitted for marking</p>
               <p>• Status: TERMINATED - CHEATED</p>
-            </div>
-
-            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-300">
-              <p className="text-yellow-800 text-sm text-center">
-                <strong>Redirecting to results page...</strong>
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -839,6 +845,7 @@ export function AssessmentInterface() {
         strictMode={true}
         allowedKeys={["Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "Delete"]}
         onCriticalViolation={(violation, keyCombo) => {
+          console.log("[v0] Critical violation detected:", violation)
           setIsExamTerminated(true)
           setTerminationReason("security_violation")
           setIsProtectedMode(false)
@@ -849,8 +856,19 @@ export function AssessmentInterface() {
             variant: "destructive",
             className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
           })
+        }}
+        onAltTabViolation={(violation, keyCombo) => {
+          console.log("[v0] Alt+Tab violation detected:", violation)
+          setIsExamTerminated(true)
+          setTerminationReason("alt_tab_violation")
+          setIsProtectedMode(false)
 
-          setTimeout(() => submitTerminatedExam("security_violation"), 1)
+          toast({
+            title: "Exam Terminated - Alt+Tab Detected",
+            description: "Alt+Tab usage is strictly prohibited. Your exam has been terminated immediately.",
+            variant: "destructive",
+            className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
+          })
         }}
       />
 
@@ -867,7 +885,16 @@ export function AssessmentInterface() {
         showControls={false}
         violationLimit={3}
         onTerminate={() => {
-          setTimeout(() => submitTerminatedExam("security_violation"), 1)
+          setIsExamTerminated(true)
+          setTerminationReason("fullscreen_violation_limit")
+          setIsProtectedMode(false)
+
+          toast({
+            title: "Exam Terminated - Fullscreen Violations",
+            description: "Maximum fullscreen exit attempts exceeded. Your exam has been terminated.",
+            variant: "destructive",
+            className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
+          })
         }}
       />
 
@@ -881,7 +908,7 @@ export function AssessmentInterface() {
               </div>
               <div className="flex items-center gap-4">
                 <Button
-                  onClick={handleSubmit}
+                  onClick={handleSubmitExam}
                   disabled={isSubmitting}
                   className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
                 >
@@ -953,19 +980,19 @@ export function AssessmentInterface() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="bg-gray-50 p-6 rounded-lg">
+                <div className="bg-gray-50 p-6 rounded-lg max-h-96 overflow-y-auto">
                   <div className="text-lg leading-relaxed space-y-2">
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-gray-900 sticky top-0 bg-gray-50 pb-2">
                       {currentQuestionIndex + 1}. {currentQuestion?.question}
                     </p>
                     {!isNATQuestion && (
-                      <>
+                      <div className="space-y-2">
                         {availableOptions.map((option) => (
-                          <p key={option.key} className="ml-4">
+                          <p key={option.key} className="ml-4 py-1">
                             {option.key}) {option.text}
                           </p>
                         ))}
-                      </>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1033,29 +1060,86 @@ export function AssessmentInterface() {
               </CardContent>
             </Card>
 
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center pt-4 border-t">
               <Button
                 onClick={handlePreviousQuestion}
                 disabled={currentQuestionIndex === 0}
                 variant="outline"
-                className="flex items-center gap-2 bg-transparent"
+                className="flex items-center gap-2 px-6 py-2 bg-transparent"
               >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 9l-7-7 7-7" />
+                </svg>
                 Previous
               </Button>
 
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <Button
                   onClick={handleLockCurrentQuestion}
                   disabled={lockedQuestions.has(currentQuestionIndex)}
-                  variant="outline"
-                  className="flex items-center gap-2 bg-transparent"
+                  variant={lockedQuestions.has(currentQuestionIndex) ? "secondary" : "outline"}
+                  className={`flex items-center gap-2 px-6 py-2 ${
+                    lockedQuestions.has(currentQuestionIndex)
+                      ? "bg-green-100 text-green-800 border-green-300"
+                      : "hover:bg-blue-50 hover:border-blue-300"
+                  }`}
                 >
-                  {lockedQuestions.has(currentQuestionIndex) ? <>🔒 Locked</> : <>🔒 Lock Answer</>}
+                  {lockedQuestions.has(currentQuestionIndex) ? (
+                    <>
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                          fillRule="evenodd"
+                          d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 006 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      Locked
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                      Lock Answer
+                    </>
+                  )}
                 </Button>
 
                 {currentQuestionIndex < questions.length - 1 && (
-                  <Button onClick={handleNextQuestion} className="flex items-center gap-2">
+                  <Button
+                    onClick={handleNextQuestion}
+                    className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700"
+                  >
                     Next
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Button>
+                )}
+
+                {currentQuestionIndex === questions.length - 1 && (
+                  <Button
+                    onClick={() => {
+                      if (window.confirm("Are you sure you want to submit your exam? This action cannot be undone.")) {
+                        handleSubmitExam()
+                      }
+                    }}
+                    className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    Submit Exam
                   </Button>
                 )}
               </div>
@@ -1112,3 +1196,6 @@ export function AssessmentInterface() {
     </ProtectedWindow>
   )
 }
+
+export { AssessmentInterface }
+export default AssessmentInterface

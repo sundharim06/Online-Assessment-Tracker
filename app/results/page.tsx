@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Trophy } from "lucide-react"
+import { CheckCircle, XCircle, Trophy, Lock } from "lucide-react"
 
 interface AssessmentResult {
   totalScore: number
@@ -16,12 +16,13 @@ interface AssessmentResult {
   totalAvailableQuestions?: number
   marksFromAnsweredQuestions?: number
   totalExamMarks?: number
-  reviewData?: any // Assuming reviewData is an object or array
+  reviewData?: any
 }
 
 export default function ResultsPage() {
   const [result, setResult] = useState<AssessmentResult | null>(null)
   const [studentName, setStudentName] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function ResultsPage() {
 
       if (!resultData || !name) {
         console.log("[v0] Missing session data, redirecting to home")
-        router.push("/")
+        router.replace("/")
         return
       }
 
@@ -44,98 +45,57 @@ export default function ResultsPage() {
 
       setResult(parsedResult.result)
       setStudentName(name)
+      setIsLoading(false)
 
       if (parsedResult.result.reviewData) {
         sessionStorage.setItem("reviewData", JSON.stringify(parsedResult.result.reviewData))
       }
 
-      // Prevent back navigation
-      const preventBack = () => {
-        console.log("[v0] Preventing back navigation")
+      const preventBack = (e: PopStateEvent) => {
+        console.log("[v0] Back navigation blocked - redirecting to home")
+        e.preventDefault()
+        e.stopPropagation()
+        // Push multiple history entries to make back navigation impossible
+        for (let i = 0; i < 10; i++) {
+          window.history.pushState(null, "", window.location.href)
+        }
+        router.replace("/")
+      }
+
+      // Push multiple history entries to block back navigation completely
+      for (let i = 0; i < 20; i++) {
         window.history.pushState(null, "", window.location.href)
       }
 
-      // Push initial state and set up popstate listener
-      window.history.pushState(null, "", window.location.href)
       window.addEventListener("popstate", preventBack)
 
-      // Prevent page refresh and navigation
-      const preventRefresh = (e: BeforeUnloadEvent) => {
-        console.log("[v0] Preventing page refresh")
-        e.preventDefault()
-        e.returnValue = "Exam completed. Refreshing will not change your results."
-        return "Exam completed. Refreshing will not change your results."
-      }
-
-      window.addEventListener("beforeunload", preventRefresh)
-
-      let touchStartX = 0
-      let touchStartY = 0
-
-      const preventSwipeStart = (e: TouchEvent) => {
-        try {
-          if (e.touches.length > 1) {
-            e.preventDefault()
-            return
-          }
-
-          const touch = e.touches[0]
-          touchStartX = touch.clientX
-          touchStartY = touch.clientY
-          console.log("[v0] Touch start:", { x: touchStartX, y: touchStartY })
-        } catch (error) {
-          console.log("[v0] Touch start error:", error)
-        }
-      }
-
-      const preventSwipeMove = (e: TouchEvent) => {
-        try {
-          if (e.touches.length > 1) {
-            e.preventDefault()
-            return
-          }
-
-          const touch = e.touches[0]
-          const deltaX = Math.abs(touch.clientX - touchStartX)
-          const deltaY = Math.abs(touch.clientY - touchStartY)
-          const threshold = 50
-
-          // Prevent horizontal swipes that could trigger navigation
-          if (deltaX > threshold && deltaX > deltaY) {
-            console.log("[v0] Preventing horizontal swipe navigation")
-            e.preventDefault()
-          }
-
-          // Prevent edge swipes
-          if (touchStartX < threshold || touchStartX > window.innerWidth - threshold) {
-            e.preventDefault()
-          }
-        } catch (error) {
-          console.log("[v0] Touch move error:", error)
-        }
-      }
-
-      // Prevent keyboard shortcuts that could navigate away
       const preventKeyboardNavigation = (e: KeyboardEvent) => {
         try {
-          // Prevent Alt+Left/Right (back/forward)
+          // Block all navigation shortcuts
           if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-            console.log("[v0] Preventing Alt+Arrow navigation")
+            console.log("[v0] Blocking Alt+Arrow navigation")
             e.preventDefault()
+            e.stopPropagation()
             return false
           }
 
-          // Prevent Ctrl+R, F5 (refresh)
           if ((e.ctrlKey && e.key === "r") || e.key === "F5") {
-            console.log("[v0] Preventing refresh shortcut")
+            console.log("[v0] Blocking refresh shortcut")
             e.preventDefault()
+            e.stopPropagation()
             return false
           }
 
-          // Prevent Backspace navigation (when not in input)
           if (e.key === "Backspace" && !(e.target as HTMLElement)?.matches("input, textarea")) {
-            console.log("[v0] Preventing backspace navigation")
+            console.log("[v0] Blocking backspace navigation")
             e.preventDefault()
+            e.stopPropagation()
+            return false
+          }
+
+          if (e.key === "F5" || (e.ctrlKey && e.key === "F5")) {
+            e.preventDefault()
+            e.stopPropagation()
             return false
           }
         } catch (error) {
@@ -143,7 +103,6 @@ export default function ResultsPage() {
         }
       }
 
-      // Disable right-click context menu
       const preventContextMenu = (e: MouseEvent) => {
         try {
           console.log("[v0] Preventing context menu")
@@ -155,30 +114,23 @@ export default function ResultsPage() {
       }
 
       try {
-        document.addEventListener("touchstart", preventSwipeStart, { passive: false })
-        document.addEventListener("touchmove", preventSwipeMove, { passive: false })
         document.addEventListener("keydown", preventKeyboardNavigation)
         document.addEventListener("contextmenu", preventContextMenu)
-        console.log("[v0] All event listeners added successfully")
+        console.log("[v0] Essential event listeners added successfully")
       } catch (error) {
         console.log("[v0] Error adding event listeners:", error)
       }
 
-      // Clear assessment data from sessionStorage to prevent retaking
       sessionStorage.removeItem("currentQuestion")
       sessionStorage.removeItem("answers")
       sessionStorage.removeItem("examStartTime")
       sessionStorage.removeItem("timeRemaining")
       console.log("[v0] Cleared assessment session data")
 
-      // Cleanup function
       return () => {
         console.log("[v0] Cleaning up event listeners")
         try {
           window.removeEventListener("popstate", preventBack)
-          window.removeEventListener("beforeunload", preventRefresh)
-          document.removeEventListener("touchstart", preventSwipeStart)
-          document.removeEventListener("touchmove", preventSwipeMove)
           document.removeEventListener("keydown", preventKeyboardNavigation)
           document.removeEventListener("contextmenu", preventContextMenu)
         } catch (error) {
@@ -187,40 +139,11 @@ export default function ResultsPage() {
       }
     } catch (error) {
       console.log("[v0] Error in main useEffect:", error)
-      router.push("/")
+      router.replace("/")
     }
   }, [router])
 
-  useEffect(() => {
-    console.log("[v0] Setting up history override")
-    try {
-      // Override browser navigation methods
-      const originalPushState = window.history.pushState
-      const originalReplaceState = window.history.replaceState
-
-      window.history.pushState = (...args) => {
-        console.log("[v0] History pushState intercepted")
-        // Allow only current page updates
-        return originalPushState.apply(window.history, args)
-      }
-
-      window.history.replaceState = (...args) => {
-        console.log("[v0] History replaceState intercepted")
-        // Allow only current page updates
-        return originalReplaceState.apply(window.history, args)
-      }
-
-      return () => {
-        console.log("[v0] Restoring original history methods")
-        window.history.pushState = originalPushState
-        window.history.replaceState = originalReplaceState
-      }
-    } catch (error) {
-      console.log("[v0] Error setting up history override:", error)
-    }
-  }, [])
-
-  if (!result) {
+  if (isLoading || !result) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -239,9 +162,10 @@ export default function ResultsPage() {
           </div>
           <CardTitle className="text-2xl text-green-700">Assessment Complete!</CardTitle>
           <p className="text-gray-600">Congratulations, {studentName}</p>
-          <p className="text-xs text-gray-500 mt-2">
-            Results are final. Navigation and refresh are disabled for exam integrity.
-          </p>
+          <div className="flex items-center justify-center gap-2 mt-2 text-xs text-gray-500">
+            <Lock className="h-3 w-3" />
+            <span>Navigation locked for exam integrity</span>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="text-center space-y-4">

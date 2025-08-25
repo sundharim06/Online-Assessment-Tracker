@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useCallback } from "react"
+import { useEffect, useCallback, useRef } from "react"
 
 interface KeyboardBlockerProps {
   enabled: boolean
@@ -8,6 +8,7 @@ interface KeyboardBlockerProps {
   allowedKeys?: string[]
   strictMode?: boolean
   onCriticalViolation?: (violation: string, keyCombo: string) => void
+  onAltTabViolation?: (violation: string, keyCombo: string) => void
 }
 
 export function KeyboardBlocker({
@@ -16,10 +17,52 @@ export function KeyboardBlocker({
   allowedKeys = [],
   strictMode = true,
   onCriticalViolation,
+  onAltTabViolation,
 }: KeyboardBlockerProps) {
+  const altKeyPressed = useRef(false)
+  const tabKeyPressed = useRef(false)
+  const altTabDetected = useRef(false)
+
+  const preventAltTab = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.altKey && (event.key === "Tab" || event.code === "Tab")) {
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+
+        // Additional prevention methods
+        if (event.cancelable) {
+          event.returnValue = false
+        }
+
+        altTabDetected.current = true
+
+        // Trigger violation immediately
+        if (onAltTabViolation) {
+          onAltTabViolation("Alt+Tab detected - Exam terminated", "Alt+Tab")
+        }
+
+        return false
+      }
+    },
+    [onAltTabViolation],
+  )
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return
+
+      if (event.key === "Alt") {
+        altKeyPressed.current = true
+      }
+      if (event.key === "Tab" && altKeyPressed.current) {
+        tabKeyPressed.current = true
+      }
+
+      if (event.altKey && (event.key === "Tab" || event.code === "Tab")) {
+        preventAltTab(event)
+        return false
+      }
 
       const key = event.key
       const code = event.code
@@ -47,6 +90,7 @@ export function KeyboardBlocker({
       let blocked = false
       let violationType = ""
       let isCritical = false
+      let isAltTab = false
 
       if (key === "Escape") {
         blocked = true
@@ -90,20 +134,23 @@ export function KeyboardBlocker({
       ) {
         blocked = true
         violationType = "Navigation/refresh blocked"
-      }
-
-      // Block tab switching and window management
-      else if (
+      } else if (
         (ctrl && key === "Tab") || // Switch tabs
         (ctrl && shift && key === "Tab") || // Switch tabs reverse
-        (alt && key === "Tab") || // Switch windows
-        (alt && shift && key === "Tab") || // Switch windows reverse
+        (alt && key === "Tab") || // Switch windows - CRITICAL
+        (alt && shift && key === "Tab") || // Switch windows reverse - CRITICAL
         (ctrl && key >= "1" && key <= "9") || // Switch to tab number
         (meta && key === "Tab") || // Mac window switching
-        (meta && key === "`") // Mac app switching
+        (meta && key === "`") || // Mac app switching
+        (alt && key === "Escape") // Alt+Esc window switching
       ) {
         blocked = true
         violationType = "Window/tab switching blocked"
+        if ((alt && key === "Tab") || (alt && shift && key === "Tab")) {
+          isAltTab = true
+          violationType = "Alt+Tab detected - Exam terminated immediately"
+          isCritical = true
+        }
       }
 
       // Block system shortcuts
@@ -181,7 +228,13 @@ export function KeyboardBlocker({
         event.stopPropagation()
         event.stopImmediatePropagation()
 
-        if (isCritical && onCriticalViolation) {
+        if (event.cancelable) {
+          event.returnValue = false
+        }
+
+        if (isAltTab && onAltTabViolation) {
+          onAltTabViolation(violationType, keyCombo)
+        } else if (isCritical && onCriticalViolation) {
           onCriticalViolation(violationType, keyCombo)
         } else {
           onViolation?.(violationType, keyCombo)
@@ -191,12 +244,29 @@ export function KeyboardBlocker({
 
       return true
     },
-    [enabled, onViolation, onCriticalViolation, allowedKeys, strictMode],
+    [enabled, onViolation, onCriticalViolation, onAltTabViolation, allowedKeys, strictMode, preventAltTab],
   )
 
   const handleKeyUp = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return
+
+      if (event.key === "Alt") {
+        altKeyPressed.current = false
+        // Reset Alt+Tab detection after a short delay
+        setTimeout(() => {
+          altTabDetected.current = false
+        }, 100)
+      }
+      if (event.key === "Tab") {
+        tabKeyPressed.current = false
+      }
+
+      // Immediate Alt+Tab blocking
+      if (event.altKey && (event.key === "Tab" || event.code === "Tab")) {
+        preventAltTab(event)
+        return false
+      }
 
       // Block key up events for system keys to prevent any delayed actions
       if (
@@ -207,30 +277,49 @@ export function KeyboardBlocker({
       ) {
         event.preventDefault()
         event.stopPropagation()
+        event.stopImmediatePropagation()
       }
     },
-    [enabled],
+    [enabled, preventAltTab],
   )
 
   const handleKeyPress = useCallback(
     (event: KeyboardEvent) => {
       if (!enabled) return
 
+      // Immediate Alt+Tab blocking
+      if (event.altKey && (event.key === "Tab" || event.code === "Tab")) {
+        preventAltTab(event)
+        return false
+      }
+
       // Additional blocking for key press events
       if (event.ctrlKey || event.altKey || event.metaKey || event.key.match(/^F\d+$/)) {
         event.preventDefault()
         event.stopPropagation()
+        event.stopImmediatePropagation()
       }
     },
-    [enabled],
+    [enabled, preventAltTab],
   )
+
+  const handleWindowBlur = useCallback(() => {
+    if (enabled && altTabDetected.current && onAltTabViolation) {
+      // Only trigger if we actually detected Alt+Tab key combination
+      onAltTabViolation("Alt+Tab confirmed - Window focus lost after Alt+Tab detection", "Alt+Tab + Window Blur")
+    }
+    // Reset detection flags
+    altKeyPressed.current = false
+    tabKeyPressed.current = false
+  }, [enabled, onAltTabViolation])
 
   useEffect(() => {
     if (enabled) {
-      // Add event listeners with capture phase to intercept early
       document.addEventListener("keydown", handleKeyDown, { capture: true, passive: false })
       document.addEventListener("keyup", handleKeyUp, { capture: true, passive: false })
       document.addEventListener("keypress", handleKeyPress, { capture: true, passive: false })
+
+      window.addEventListener("blur", handleWindowBlur, { capture: true })
 
       // Block context menu (right-click)
       const handleContextMenu = (e: MouseEvent) => {
@@ -256,7 +345,6 @@ export function KeyboardBlocker({
       document.addEventListener("dragstart", handleDragStart, { capture: true })
       document.addEventListener("selectstart", handleSelectStart, { capture: true })
 
-      // Disable browser shortcuts via CSS
       const style = document.createElement("style")
       style.textContent = `
         * {
@@ -277,6 +365,11 @@ export function KeyboardBlocker({
           -ms-user-select: text !important;
           user-select: text !important;
         }
+
+        /* Prevent any focus outline that might indicate Alt+Tab */
+        *:focus {
+          outline: none !important;
+        }
       `
       document.head.appendChild(style)
 
@@ -284,6 +377,9 @@ export function KeyboardBlocker({
         document.removeEventListener("keydown", handleKeyDown, { capture: true })
         document.removeEventListener("keyup", handleKeyUp, { capture: true })
         document.removeEventListener("keypress", handleKeyPress, { capture: true })
+
+        window.removeEventListener("blur", handleWindowBlur, { capture: true })
+
         document.removeEventListener("contextmenu", handleContextMenu, { capture: true })
         document.removeEventListener("dragstart", handleDragStart, { capture: true })
         document.removeEventListener("selectstart", handleSelectStart, { capture: true })
@@ -293,7 +389,7 @@ export function KeyboardBlocker({
         }
       }
     }
-  }, [enabled, handleKeyDown, handleKeyUp, handleKeyPress, onViolation, strictMode])
+  }, [enabled, handleKeyDown, handleKeyUp, handleKeyPress, handleWindowBlur, onViolation, strictMode])
 
   return null // This component doesn't render anything
 }

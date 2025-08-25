@@ -8,30 +8,71 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, User, Hash, Building, GraduationCap, Mail } from "lucide-react"
+import { Loader2, User, Hash, Building, GraduationCap, Mail, School } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface FormData {
   name: string
   rollNumber: string
-  section: string
+  institution: string
   department: string
+  section: string
 }
+
+const INSTITUTION_CONFIG = {
+  CITAR: {
+    name: "CITAR",
+    departments: ["CSE"],
+    sections: {
+      CSE: ["A", "B", "C"],
+    },
+  },
+  CIT: {
+    name: "CIT",
+    departments: ["CSE"],
+    sections: {
+      CSE: ["A", "B", "C", "D"],
+    },
+  },
+} as const
 
 export function StudentRegistrationForm() {
   const { data: session } = useSession()
   const [formData, setFormData] = useState<FormData>({
     name: session?.user?.name || "",
     rollNumber: "",
-    section: "",
+    institution: "",
     department: "",
+    section: "",
   })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
   const handleInputChange = (field: keyof FormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => {
+      const newData = { ...prev, [field]: value }
+
+      if (field === "institution") {
+        newData.department = ""
+        newData.section = ""
+      } else if (field === "department") {
+        newData.section = ""
+      }
+
+      return newData
+    })
+  }
+
+  const getAvailableDepartments = () => {
+    if (!formData.institution) return []
+    return INSTITUTION_CONFIG[formData.institution as keyof typeof INSTITUTION_CONFIG]?.departments || []
+  }
+
+  const getAvailableSections = () => {
+    if (!formData.institution || !formData.department) return []
+    const institutionConfig = INSTITUTION_CONFIG[formData.institution as keyof typeof INSTITUTION_CONFIG]
+    return institutionConfig?.sections[formData.department as keyof typeof institutionConfig.sections] || []
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,7 +80,7 @@ export function StudentRegistrationForm() {
     setIsLoading(true)
 
     try {
-      if (!session?.user?.email?.endsWith(".cse2023@citchennai.net")) {
+      if (!session?.user?.email?.endsWith("@citchennai.net")) {
         toast({
           title: "Access Denied",
           description: "Only @citchennai.net email addresses are allowed.",
@@ -74,6 +115,7 @@ export function StudentRegistrationForm() {
 
         sessionStorage.setItem("studentId", result.studentId.toString())
         sessionStorage.setItem("studentName", formData.name)
+        sessionStorage.setItem("studentInstitution", formData.institution)
         sessionStorage.setItem("studentSection", formData.section)
         sessionStorage.setItem("studentDepartment", formData.department)
         sessionStorage.setItem("studentEmail", session?.user?.email || "")
@@ -164,19 +206,21 @@ export function StudentRegistrationForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="section" className="flex items-center gap-2">
-          <Building className="h-4 w-4" />
-          Section
+        <Label htmlFor="institution" className="flex items-center gap-2">
+          <School className="h-4 w-4" />
+          Institution
         </Label>
-        <Select onValueChange={(value) => handleInputChange("section", value)} required>
+        <Select
+          value={formData.institution}
+          onValueChange={(value) => handleInputChange("institution", value)}
+          required
+        >
           <SelectTrigger className="transition-all focus:ring-2 focus:ring-blue-500">
-            <SelectValue placeholder="Select your section" />
+            <SelectValue placeholder="Select your institution" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="A">Section A</SelectItem>
-            <SelectItem value="B">Section B</SelectItem>
-            <SelectItem value="C">Section C</SelectItem>
-            <SelectItem value="D">Section D</SelectItem>
+            <SelectItem value="CITAR">CITAR</SelectItem>
+            <SelectItem value="CIT">CIT</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -186,17 +230,53 @@ export function StudentRegistrationForm() {
           <GraduationCap className="h-4 w-4" />
           Department
         </Label>
-        <Select onValueChange={(value) => handleInputChange("department", value)} required>
+        <Select
+          key={`department-${formData.institution}`}
+          value={formData.department}
+          onValueChange={(value) => handleInputChange("department", value)}
+          required
+          disabled={!formData.institution}
+        >
           <SelectTrigger className="transition-all focus:ring-2 focus:ring-blue-500">
-            <SelectValue placeholder="Select your department" />
+            <SelectValue placeholder={formData.institution ? "Select your department" : "Select institution first"} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="Computer Science">Computer Science</SelectItem>
-            <SelectItem value="Electrical Engineering">Electrical Engineering</SelectItem>
-            <SelectItem value="Mechanical Engineering">Mechanical Engineering</SelectItem>
-            <SelectItem value="Civil Engineering">Civil Engineering</SelectItem>
-            <SelectItem value="Electronics and Communication">Electronics and Communication</SelectItem>
-            <SelectItem value="Information Technology">Information Technology</SelectItem>
+            {getAvailableDepartments().map((dept) => (
+              <SelectItem key={dept} value={dept}>
+                {dept === "CSE" ? "Computer Science Engineering" : dept}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="section" className="flex items-center gap-2">
+          <Building className="h-4 w-4" />
+          Section
+        </Label>
+        <Select
+          key={`section-${formData.institution}-${formData.department}`}
+          value={formData.section}
+          onValueChange={(value) => handleInputChange("section", value)}
+          required
+          disabled={!formData.institution || !formData.department}
+        >
+          <SelectTrigger className="transition-all focus:ring-2 focus:ring-blue-500">
+            <SelectValue
+              placeholder={
+                formData.institution && formData.department
+                  ? "Select your section"
+                  : "Select institution and department first"
+              }
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {getAvailableSections().map((section) => (
+              <SelectItem key={section} value={section}>
+                Section {section}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

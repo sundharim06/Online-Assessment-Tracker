@@ -58,7 +58,7 @@ export interface Question {
 export interface Student {
   name: string
   rollNumber: string
-  phoneNumber: string
+  institution: string
   section: string
   department: string
 }
@@ -67,7 +67,7 @@ export interface Student {
 export interface Result {
   name: string
   rollNumber: string
-  phoneNumber: string
+  institution: string
   section: string
   department: string
   email: string
@@ -191,7 +191,7 @@ export async function saveResult(result: Result): Promise<void> {
     await sheet.addRow({
       Name: result.name,
       "Roll Number": result.rollNumber,
-      "Phone Number": result.phoneNumber,
+      Institution: result.institution,
       Section: result.section,
       Department: result.department,
       Email: result.email,
@@ -222,7 +222,7 @@ export async function getAllResults(): Promise<Result[]> {
     return rows.map((row) => ({
       name: row.get("Name") || "",
       rollNumber: row.get("Roll Number") || "",
-      phoneNumber: row.get("Phone Number") || "",
+      institution: row.get("Institution") || "",
       section: row.get("Section") || "",
       department: row.get("Department") || "",
       email: row.get("Email") || "",
@@ -263,7 +263,7 @@ export async function checkStudentExists(email: string): Promise<boolean> {
 export async function saveInitialRegistration(studentData: {
   name: string
   rollNumber: string
-  phoneNumber: string
+  institution: string
   section: string
   department: string
   email: string
@@ -283,7 +283,7 @@ export async function saveInitialRegistration(studentData: {
     await sheet.addRow({
       Name: studentData.name,
       "Roll Number": studentData.rollNumber,
-      "Phone Number": studentData.phoneNumber,
+      Institution: studentData.institution,
       Section: studentData.section,
       Department: studentData.department,
       Email: studentData.email,

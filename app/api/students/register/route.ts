@@ -19,9 +19,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, rollNumber, section, department } = body
+    const { name, rollNumber, institution, section, department } = body
 
-    if (!name || !rollNumber || !section || !department) {
+    if (!name || !rollNumber || !institution || !section || !department) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 })
     }
 
@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     await saveInitialRegistration({
       name,
       rollNumber,
+      institution,
       section,
       department,
       email: session.user.email,

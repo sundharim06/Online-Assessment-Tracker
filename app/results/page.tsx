@@ -36,7 +36,7 @@ export default function ResultsPage() {
 
       if (!resultData || !name) {
         console.log("[v0] Missing session data, redirecting to home")
-        router.replace("/")
+        window.location.href = "/"
         return
       }
 
@@ -52,22 +52,49 @@ export default function ResultsPage() {
       }
 
       const preventBack = (e: PopStateEvent) => {
-        console.log("[v0] Back navigation blocked - redirecting to home")
+        console.log("[v0] Back navigation blocked - redirecting to home immediately")
         e.preventDefault()
         e.stopPropagation()
-        // Push multiple history entries to make back navigation impossible
-        for (let i = 0; i < 10; i++) {
-          window.history.pushState(null, "", window.location.href)
+
+        // Immediately redirect to home page
+        window.location.href = "/"
+        return false
+      }
+
+      const blockBackNavigation = () => {
+        // Clear all assessment-related session data immediately
+        sessionStorage.removeItem("currentQuestion")
+        sessionStorage.removeItem("answers")
+        sessionStorage.removeItem("examStartTime")
+        sessionStorage.removeItem("timeRemaining")
+        sessionStorage.removeItem("examStarted")
+        sessionStorage.removeItem("studentId")
+        sessionStorage.removeItem("isExamActive")
+
+        // Push many history entries to make back navigation impossible
+        for (let i = 0; i < 50; i++) {
+          window.history.pushState({ page: "results", index: i }, "", window.location.href)
         }
-        router.replace("/")
+
+        // Replace current state to ensure we're at results
+        window.history.replaceState({ page: "results", locked: true }, "", window.location.href)
       }
 
-      // Push multiple history entries to block back navigation completely
-      for (let i = 0; i < 20; i++) {
-        window.history.pushState(null, "", window.location.href)
-      }
+      blockBackNavigation()
 
-      window.addEventListener("popstate", preventBack)
+      window.addEventListener("popstate", preventBack, true)
+      window.addEventListener("beforeunload", (e) => {
+        // Don't show confirmation on results page
+        return undefined
+      })
+
+      const preventHashChange = (e: HashChangeEvent) => {
+        console.log("[v0] Hash change blocked - redirecting to home")
+        e.preventDefault()
+        window.location.href = "/"
+        return false
+      }
+      window.addEventListener("hashchange", preventHashChange)
 
       const preventKeyboardNavigation = (e: KeyboardEvent) => {
         try {
@@ -76,6 +103,7 @@ export default function ResultsPage() {
             console.log("[v0] Blocking Alt+Arrow navigation")
             e.preventDefault()
             e.stopPropagation()
+            window.location.href = "/"
             return false
           }
 
@@ -90,12 +118,14 @@ export default function ResultsPage() {
             console.log("[v0] Blocking backspace navigation")
             e.preventDefault()
             e.stopPropagation()
+            window.location.href = "/"
             return false
           }
 
-          if (e.key === "F5" || (e.ctrlKey && e.key === "F5")) {
+          if ((e.ctrlKey || e.metaKey) && (e.key === "[" || e.key === "]")) {
             e.preventDefault()
             e.stopPropagation()
+            window.location.href = "/"
             return false
           }
         } catch (error) {
@@ -113,33 +143,43 @@ export default function ResultsPage() {
         }
       }
 
+      const preventMouseNavigation = (e: MouseEvent) => {
+        // Block mouse back/forward buttons
+        if (e.button === 3 || e.button === 4) {
+          console.log("[v0] Mouse navigation blocked - redirecting to home")
+          e.preventDefault()
+          e.stopPropagation()
+          window.location.href = "/"
+          return false
+        }
+      }
+
       try {
-        document.addEventListener("keydown", preventKeyboardNavigation)
-        document.addEventListener("contextmenu", preventContextMenu)
-        console.log("[v0] Essential event listeners added successfully")
+        document.addEventListener("keydown", preventKeyboardNavigation, true)
+        document.addEventListener("contextmenu", preventContextMenu, true)
+        document.addEventListener("mouseup", preventMouseNavigation, true)
+        console.log("[v0] All event listeners added successfully")
       } catch (error) {
         console.log("[v0] Error adding event listeners:", error)
       }
 
-      sessionStorage.removeItem("currentQuestion")
-      sessionStorage.removeItem("answers")
-      sessionStorage.removeItem("examStartTime")
-      sessionStorage.removeItem("timeRemaining")
-      console.log("[v0] Cleared assessment session data")
+      console.log("[v0] Assessment session data cleared")
 
       return () => {
         console.log("[v0] Cleaning up event listeners")
         try {
-          window.removeEventListener("popstate", preventBack)
-          document.removeEventListener("keydown", preventKeyboardNavigation)
-          document.removeEventListener("contextmenu", preventContextMenu)
+          window.removeEventListener("popstate", preventBack, true)
+          window.removeEventListener("hashchange", preventHashChange)
+          document.removeEventListener("keydown", preventKeyboardNavigation, true)
+          document.removeEventListener("contextmenu", preventContextMenu, true)
+          document.removeEventListener("mouseup", preventMouseNavigation, true)
         } catch (error) {
           console.log("[v0] Error removing event listeners:", error)
         }
       }
     } catch (error) {
       console.log("[v0] Error in main useEffect:", error)
-      router.replace("/")
+      window.location.href = "/"
     }
   }, [router])
 

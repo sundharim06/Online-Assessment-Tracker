@@ -39,7 +39,7 @@ export function StudentRegistrationForm() {
     setIsLoading(true)
 
     try {
-      if (!session?.user?.email?.endsWith("@citchennai.net")) {
+      if (!session?.user?.email?.endsWith(".cse2023@citchennai.net")) {
         toast({
           title: "Access Denied",
           description: "Only @citchennai.net email addresses are allowed.",

@@ -7,10 +7,36 @@ function seededRandom(seed: number) {
   return x - Math.floor(x)
 }
 
-function shuffleArray<T>(array: T[]): T[] {
+// Optimized duplicate removal function
+function removeDuplicates(questions: any[]) {
+  const seenIds = new Set()
+  const seenQuestions = new Set()
+
+  return questions.filter((question) => {
+    // Check by ID first if available
+    if (question.id) {
+      if (seenIds.has(question.id)) {
+        return false
+      }
+      seenIds.add(question.id)
+      return true
+    }
+
+    // Fallback to question text comparison
+    const normalizedQuestion = question.question.trim().toLowerCase()
+    if (seenQuestions.has(normalizedQuestion)) {
+      return false
+    }
+    seenQuestions.add(normalizedQuestion)
+    return true
+  })
+}
+
+// Optimized Fisher-Yates shuffle with seeded random
+function shuffleWithSeed(array: any[], seed: number) {
   const shuffled = [...array]
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
+    const j = Math.floor(seededRandom(seed + i) * (i + 1))
     ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
   return shuffled
@@ -68,33 +94,10 @@ export async function GET(request: Request) {
       )
     }
 
-    const uniqueQuestions = questions.filter((question, index, self) => {
-      // First check by ID if available
-      if (question.id) {
-        return index === self.findIndex((q) => q.id === question.id)
-      }
-      // Fallback to question text comparison
-      return index === self.findIndex((q) => q.question.trim().toLowerCase() === question.question.trim().toLowerCase())
-    })
-
-    const seenIds = new Set()
-    const finalUniqueQuestions = uniqueQuestions.filter((question) => {
-      if (question.id && seenIds.has(question.id)) {
-        return false
-      }
-      if (question.id) {
-        seenIds.add(question.id)
-      }
-      return true
-    })
+    const uniqueQuestions = removeDuplicates(questions)
 
     const sessionSeed = sessionId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
-
-    const shuffled = [...finalUniqueQuestions]
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(seededRandom(sessionSeed + i) * (i + 1))
-      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-    }
+    const shuffled = shuffleWithSeed(uniqueQuestions, sessionSeed)
 
     const maxQuestions = examConfig?.totalQuestions || shuffled.length
     const selectedQuestions = shuffled.slice(0, Math.min(maxQuestions, shuffled.length))
@@ -121,8 +124,8 @@ export async function GET(request: Request) {
         total: secureQuestions.length,
         examConfig: examConfig,
         sessionId: sessionId,
-        uniqueQuestionsFound: finalUniqueQuestions.length,
-        duplicatesRemoved: questions.length - finalUniqueQuestions.length,
+        uniqueQuestionsFound: uniqueQuestions.length,
+        duplicatesRemoved: questions.length - uniqueQuestions.length,
       },
       {
         headers,

@@ -59,26 +59,29 @@ export function FullscreenController({
       const newAttempts = exitAttempts + 1
       setExitAttempts(newAttempts)
 
+      setShowExitWarning(true)
+
       if (newAttempts >= violationLimit) {
         onViolation?.(
           `Fullscreen exit violation limit exceeded (${newAttempts}/${violationLimit})`,
           "security_violation",
         )
-        setTimeout(() => onTerminate?.(), 1)
+        setTimeout(() => onTerminate?.(), 100)
         return
       }
 
-      setShowExitWarning(true)
-      onViolation?.(`Fullscreen exit attempt ${newAttempts}`, "fullscreen_violation")
+      onViolation?.(`Fullscreen exit attempt ${newAttempts}/${violationLimit}`, "fullscreen_violation")
 
       enterFullscreen()
       setTimeout(() => enterFullscreen(), 1)
       setTimeout(() => enterFullscreen(), 2)
       setTimeout(() => enterFullscreen(), 5)
       setTimeout(() => enterFullscreen(), 10)
+      setTimeout(() => enterFullscreen(), 50)
+      setTimeout(() => enterFullscreen(), 100)
       requestAnimationFrame(() => enterFullscreen())
 
-      setTimeout(() => setShowExitWarning(false), 100)
+      setTimeout(() => setShowExitWarning(false), 2000)
     }
   }, [enabled, preventExit, onFullscreenChange, onViolation, exitAttempts, violationLimit, onTerminate])
 
@@ -246,12 +249,11 @@ export function FullscreenController({
           setTimeout(() => enterFullscreen(), 1)
           setTimeout(() => enterFullscreen(), 2)
           setTimeout(() => enterFullscreen(), 5)
-          setTimeout(() => enterFullscreen(), 10)
           requestAnimationFrame(() => enterFullscreen())
         }
       }
 
-      const interval = setInterval(checkFullscreen, 1)
+      const interval = setInterval(checkFullscreen, 0.5)
       return () => clearInterval(interval)
     }
   }, [enabled, preventExit, isFullscreen, enterFullscreen])
@@ -271,25 +273,27 @@ export function FullscreenController({
   return (
     <>
       {showExitWarning && (
-        <div className="fixed inset-0 bg-red-900 bg-opacity-90 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full border-2 border-red-500 shadow-2xl">
+        <div className="fixed inset-0 bg-red-900 bg-opacity-95 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full border-2 border-red-500 shadow-2xl animate-pulse">
             <div className="text-center space-y-4">
-              <AlertTriangle className="h-12 w-12 text-red-600 mx-auto" />
-              <h3 className="text-xl font-bold text-red-800">Security Violation Detected</h3>
-              <p className="text-red-700">
+              <AlertTriangle className="h-12 w-12 text-red-600 mx-auto animate-bounce" />
+              <h3 className="text-xl font-bold text-red-800">⚠️ SECURITY VIOLATION DETECTED ⚠️</h3>
+              <p className="text-red-700 font-semibold">
                 Unauthorized attempt to exit fullscreen mode during protected exam session.
               </p>
               <div className="bg-red-50 p-3 rounded border border-red-200">
-                <p className="text-sm text-red-600">
+                <p className="text-sm text-red-600 font-bold">
                   <strong>Exit Attempts:</strong> {exitAttempts}/{violationLimit}
                 </p>
                 <p className="text-sm text-red-600">
                   {exitAttempts >= violationLimit
-                    ? "Exam will be terminated immediately!"
-                    : "Returning to fullscreen mode automatically..."}
+                    ? "⚠️ EXAM WILL BE TERMINATED IMMEDIATELY! ⚠️"
+                    : "⚠️ WARNING: Returning to fullscreen mode automatically... ⚠️"}
                 </p>
               </div>
-              <div className="text-xs text-red-500">Automatic fullscreen restoration in progress...</div>
+              <div className="text-xs text-red-500 font-semibold animate-pulse">
+                🔒 Automatic fullscreen restoration in progress...
+              </div>
             </div>
           </div>
         </div>
@@ -354,37 +358,75 @@ export function FullscreenController({
           :-webkit-full-screen {
             width: 100% !important;
             height: 100% !important;
+            transform: scale(1) !important;
+            transform-origin: center !important;
           }
           
           :-moz-full-screen {
             width: 100% !important;
             height: 100% !important;
+            transform: scale(1) !important;
+            transform-origin: center !important;
           }
           
           :-ms-fullscreen {
             width: 100% !important;
             height: 100% !important;
+            transform: scale(1) !important;
+            transform-origin: center !important;
           }
           
           :fullscreen {
             width: 100% !important;
             height: 100% !important;
+            transform: scale(1) !important;
+            transform-origin: center !important;
           }
           
           html:-webkit-full-screen,
           html:-moz-full-screen,
           html:-ms-fullscreen,
           html:fullscreen {
-            overflow: hidden !important;
+            overflow: auto !important;
+            zoom: 100% !important;
           }
           
           body:-webkit-full-screen,
           body:-moz-full-screen,
           body:-ms-fullscreen,
           body:fullscreen {
-            overflow: hidden !important;
+            overflow: auto !important;
             margin: 0 !important;
             padding: 0 !important;
+            zoom: 100% !important;
+            transform: scale(1) !important;
+            transform-origin: top left !important;
+          }
+          
+          .assessment-content,
+          .question-panel,
+          .options-container {
+            overflow-y: auto !important;
+            max-height: 100vh !important;
+          }
+          
+          ::-webkit-scrollbar {
+            width: 8px !important;
+            height: 8px !important;
+          }
+          
+          ::-webkit-scrollbar-track {
+            background: #f1f1f1 !important;
+            border-radius: 4px !important;
+          }
+          
+          ::-webkit-scrollbar-thumb {
+            background: #888 !important;
+            border-radius: 4px !important;
+          }
+          
+          ::-webkit-scrollbar-thumb:hover {
+            background: #555 !important;
           }
         `}</style>
       )}

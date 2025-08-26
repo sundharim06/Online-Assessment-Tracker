@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Clock, ChevronRight, ChevronLeft, CheckCircle, AlertCircle, Play } from "lucide-react"
+import { Clock, ChevronRight, ChevronLeft, AlertCircle, Play } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { Question, ExamConfig } from "@/lib/google-sheets"
 
@@ -28,7 +28,6 @@ export function AdminExamInterface() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [studentInfo, setStudentInfo] = useState<{ id: string; name: string } | null>(null)
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<number>>(new Set())
-  const [lockedQuestions, setLockedQuestions] = useState<Set<number>>(new Set())
   const [examStarted, setExamStarted] = useState(false)
   const [examStartTime, setExamStartTime] = useState<Date | null>(null)
   const [adminPassword, setAdminPassword] = useState("")
@@ -43,7 +42,7 @@ export function AdminExamInterface() {
   }
 
   const displayAllAnswers = () => {
-    const isPasswordCorrect = adminPassword === "9786"
+    const isPasswordCorrect = adminPassword === "twin#9786"
 
     const correctAnswerSummary = questions
       .map((question, index) => {
@@ -78,7 +77,7 @@ export function AdminExamInterface() {
   }
 
   const handlePasswordSubmit = () => {
-    if (adminPassword === "9786") {
+    if (adminPassword === "twin#9786") {
       toast({
         title: "Access Granted",
         description: "Console answers are now visible",
@@ -185,8 +184,6 @@ export function AdminExamInterface() {
     const currentQuestion = questions[currentQuestionIndex]
     const isMultipleChoice = currentQuestion.questionType === "MSQ"
 
-    if (lockedQuestions.has(currentQuestionIndex)) return
-
     setAnswers((prev) =>
       prev.map((ans) => {
         if (ans.questionId === currentQuestion.id) {
@@ -213,12 +210,16 @@ export function AdminExamInterface() {
     )
 
     setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+
+    toast({
+      title: "Answer Recorded",
+      description: "Your answer has been automatically saved and will be considered for evaluation.",
+      className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
+    })
   }
 
   const handleTextAnswerChange = (value: string) => {
     const currentQuestion = questions[currentQuestionIndex]
-
-    if (lockedQuestions.has(currentQuestionIndex)) return
 
     setAnswers((prev) =>
       prev.map((ans) => {
@@ -237,6 +238,12 @@ export function AdminExamInterface() {
 
     if (value.trim()) {
       setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+
+      toast({
+        title: "Answer Recorded",
+        description: "Your answer has been automatically saved and will be considered for evaluation.",
+        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
+      })
     } else {
       setAnsweredQuestions((prev) => {
         const newSet = new Set(prev)
@@ -252,40 +259,10 @@ export function AdminExamInterface() {
     }
   }
 
-  const handleLockCurrentQuestion = () => {
-    const currentQuestion = questions[currentQuestionIndex]
-    const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
-
-    const hasAnswer =
-      (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
-      (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
-
-    if (hasAnswer) {
-      setLockedQuestions((prev) => new Set([...prev, currentQuestionIndex]))
-
-      setTimeout(() => displayAllAnswers(), 100)
-
-      toast({
-        title: "Answer Locked",
-        description: "Your answer has been locked and will be considered for evaluation.",
-        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
-      })
-    } else {
-      toast({
-        title: "No Answer Selected",
-        description: "Please select an answer before locking the question.",
-        variant: "destructive",
-        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
-      })
-    }
-  }
-
   const handleSubmit = async () => {
     setIsSubmitting(true)
 
     try {
-      const lockedQuestionIds = Array.from(lockedQuestions).map((index) => questions[index].id)
-
       const adminSubmissionId = `ADMIN_${session?.user?.id || "system"}_${Date.now()}`
 
       const response = await fetch("/api/assessment/submit", {
@@ -296,7 +273,6 @@ export function AdminExamInterface() {
         body: JSON.stringify({
           studentId: adminSubmissionId,
           answers: answers,
-          lockedQuestionIds: lockedQuestionIds,
           studentName: session?.user?.name || "Administrator",
           studentSection: "ADMIN",
           studentDepartment: "Administration",
@@ -370,8 +346,7 @@ export function AdminExamInterface() {
                 <p>
                   • Time Duration: <strong>{examConfig.examDurationMinutes} minutes</strong>
                 </p>
-                <p>• Lock your answers to ensure they are considered for evaluation</p>
-                <p>• Only locked answers will be evaluated for your final score</p>
+                <p>• Only answered questions will be evaluated for your final score</p>
                 <p>• The assessment will auto-submit when time runs out</p>
               </div>
             </div>
@@ -434,7 +409,7 @@ export function AdminExamInterface() {
   const isNATQuestion = currentQuestion?.questionType === "NAT"
   const availableOptions = getAvailableOptions(currentQuestion)
 
-  const getLockedCount = () => lockedQuestions.size
+  const getAnsweredCount = () => answeredQuestions.size
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -454,23 +429,6 @@ export function AdminExamInterface() {
               >
                 🔑 Console Access
               </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4" />
-                    Submit Assessment
-                  </>
-                )}
-              </Button>
               <Badge
                 variant="outline"
                 className={`flex items-center gap-2 ${
@@ -485,7 +443,7 @@ export function AdminExamInterface() {
                 {formatTime(timeRemaining)}
               </Badge>
               <Badge variant="secondary">
-                {getLockedCount()} / {questions.length} Locked
+                {getAnsweredCount()} / {questions.length} Answered
               </Badge>
             </div>
           </div>
@@ -522,9 +480,9 @@ export function AdminExamInterface() {
                   <Badge variant="outline">
                     {currentQuestion.marks} Mark{currentQuestion.marks > 1 ? "s" : ""}
                   </Badge>
-                  {lockedQuestions.has(currentQuestionIndex) && (
+                  {answeredQuestions.has(currentQuestionIndex) && (
                     <Badge variant="secondary" className="bg-green-200 text-green-800">
-                      🔒 Locked
+                      ✓ Answered
                     </Badge>
                   )}
                   {isNATQuestion ? (
@@ -569,27 +527,21 @@ export function AdminExamInterface() {
                     value={currentAnswer?.textAnswer || ""}
                     onChange={(e) => handleTextAnswerChange(e.target.value)}
                     placeholder="Type your answer here..."
-                    disabled={lockedQuestions.has(currentQuestionIndex)}
-                    className={`w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      lockedQuestions.has(currentQuestionIndex) ? "bg-gray-100 cursor-not-allowed" : ""
-                    }`}
+                    className="w-full p-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   {availableOptions.map((option) => {
                     const isSelected = currentAnswer?.selectedAnswer?.includes(option.key) || false
-                    const isLocked = lockedQuestions.has(currentQuestionIndex)
 
                     return (
                       <div
                         key={option.key}
-                        onClick={() => !isLocked && handleAnswerSelect(option.key)}
-                        className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
-                          isLocked
-                            ? "cursor-not-allowed bg-gray-100 border-gray-200"
-                            : "cursor-pointer hover:bg-blue-50"
-                        } ${isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}
+                        onClick={() => handleAnswerSelect(option.key)}
+                        className={`flex items-center gap-3 p-4 rounded-lg border transition-all cursor-pointer hover:bg-blue-50 ${
+                          isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-blue-300"
+                        }`}
                       >
                         <div className="flex items-center">
                           {isMultipleChoice ? (
@@ -597,7 +549,6 @@ export function AdminExamInterface() {
                               type="checkbox"
                               checked={isSelected}
                               onChange={() => {}}
-                              disabled={isLocked}
                               className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                             />
                           ) : (
@@ -605,14 +556,11 @@ export function AdminExamInterface() {
                               type="radio"
                               checked={isSelected}
                               onChange={() => {}}
-                              disabled={isLocked}
                               className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500"
                             />
                           )}
                         </div>
-                        <span className={`font-medium text-lg ${isLocked ? "text-gray-500" : "text-gray-900"}`}>
-                          {option.key}
-                        </span>
+                        <span className="font-medium text-lg text-gray-900">{option.key}</span>
                       </div>
                     )
                   })}
@@ -633,15 +581,6 @@ export function AdminExamInterface() {
             </Button>
 
             <div className="flex gap-2">
-              <Button
-                onClick={handleLockCurrentQuestion}
-                disabled={lockedQuestions.has(currentQuestionIndex)}
-                variant="outline"
-                className="flex items-center gap-2 bg-transparent"
-              >
-                {lockedQuestions.has(currentQuestionIndex) ? <>🔒 Locked</> : <>🔒 Lock Answer</>}
-              </Button>
-
               {currentQuestionIndex < questions.length - 1 && (
                 <Button onClick={handleNextQuestion} className="flex items-center gap-2">
                   Next
@@ -652,19 +591,18 @@ export function AdminExamInterface() {
           </div>
         </div>
 
-        <div className="w-80 bg-white shadow-sm border-l min-h-screen">
+        <div className="w-80 lg:w-96 xl:w-80 bg-white shadow-sm border-l min-h-screen">
           <div className="p-4 border-b">
             <h3 className="font-semibold text-gray-900">Question Navigation</h3>
-            <p className="text-xs text-gray-500 mt-1">🔒 = Locked (for evaluation), ✓ = Has answer</p>
+            <p className="text-xs text-gray-500 mt-1">✓ = Answered and validated</p>
           </div>
-          <div className="p-4 h-[calc(100vh-120px)] overflow-y-auto">
-            <div className="grid grid-cols-5 gap-2">
+          <div className="p-4 h-[calc(100vh-120px)] overflow-y-auto overflow-x-hidden">
+            <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-5 gap-2">
               {questions.map((_, index) => {
                 const hasAnswer =
                   (answers[index]?.selectedAnswer && answers[index].selectedAnswer.length > 0) ||
                   (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
 
-                const isLocked = lockedQuestions.has(index)
                 const canNavigate = true
 
                 return (
@@ -672,25 +610,17 @@ export function AdminExamInterface() {
                     key={index}
                     onClick={() => canNavigate && setCurrentQuestionIndex(index)}
                     disabled={!canNavigate}
-                    className={`w-12 h-12 rounded-lg text-sm font-medium transition-all relative ${
+                    className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg text-xs sm:text-sm font-medium transition-all relative flex-shrink-0 ${
                       index === currentQuestionIndex
                         ? "bg-blue-600 text-white shadow-lg"
-                        : isLocked
-                          ? "bg-green-200 text-green-800 border-2 border-green-400"
-                          : hasAnswer
-                            ? "bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200"
-                            : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
-                    }`}
-                    title={
-                      isLocked
-                        ? "Question locked for evaluation"
                         : hasAnswer
-                          ? "Question has answer (not locked)"
-                          : "Question not answered"
-                    }
+                          ? "bg-green-200 text-green-800 border-2 border-green-400"
+                          : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
+                    }`}
+                    title={hasAnswer ? "Question answered and validated" : "Question not answered"}
                   >
                     {index + 1}
-                    {isLocked && <span className="absolute -top-1 -right-1 text-xs">🔒</span>}
+                    {hasAnswer && <span className="absolute -top-1 -right-1 text-xs">✓</span>}
                   </button>
                 )
               })}

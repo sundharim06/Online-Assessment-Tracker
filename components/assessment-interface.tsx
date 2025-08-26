@@ -7,12 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Clock, CheckCircle, AlertCircle, Play, Shield } from "lucide-react"
+import { Clock, AlertCircle, Play, Shield } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedWindow } from "@/components/protected-window"
 import { KeyboardBlocker } from "@/components/keyboard-blocker"
 import { FullscreenController } from "@/components/fullscreen-controller"
 import type { Question, ExamConfig } from "@/lib/google-sheets"
+import { useSession } from "next-auth/react"
 
 interface StudentAnswer {
   questionId: number
@@ -20,7 +21,8 @@ interface StudentAnswer {
   textAnswer?: string
 }
 
-function AssessmentInterface() {
+const AssessmentInterface = () => {
+  const { data: session } = useSession()
   const [questions, setQuestions] = useState<Question[]>([])
   const [examConfig, setExamConfig] = useState<ExamConfig | null>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
@@ -30,7 +32,6 @@ function AssessmentInterface() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [studentInfo, setStudentInfo] = useState<{ id: string; name: string } | null>(null)
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<number>>(new Set())
-  const [lockedQuestions, setLockedQuestions] = useState<Set<number>>(new Set())
   const [examStarted, setExamStarted] = useState(false)
   const [examStartTime, setExamStartTime] = useState<Date | null>(null)
   const [isRefreshDetected, setIsRefreshDetected] = useState(false)
@@ -44,6 +45,8 @@ function AssessmentInterface() {
   const [isRoutingToResults, setIsRoutingToResults] = useState(false) // Add routing state to prevent termination screen from showing
   const router = useRouter()
   const { toast } = useToast()
+
+  const [lockedQuestions, setLockedQuestions] = useState<Set<number>>(new Set())
 
   const submitTerminatedExam = useCallback(
     async (reason: string) => {
@@ -193,6 +196,16 @@ function AssessmentInterface() {
       setIsSubmitting(false)
     }
   }, [studentInfo, answers, router, toast, lockedQuestions, questions])
+
+  const handleSubmit = useCallback(() => {
+    // Placeholder for handleSubmit logic
+  }, [])
+
+  const handlePreviousQuestion = useCallback(() => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(currentQuestionIndex - 1)
+    }
+  }, [])
 
   useEffect(() => {
     const examInProgress = sessionStorage.getItem("examInProgress")
@@ -537,37 +550,6 @@ function AssessmentInterface() {
     }
   }
 
-  const handleLockCurrentQuestion = () => {
-    const currentQuestion = questions[currentQuestionIndex]
-    const currentAnswer = answers.find((ans) => ans.questionId === currentQuestion.id)
-
-    const hasAnswer =
-      (currentAnswer?.selectedAnswer && currentAnswer.selectedAnswer.length > 0) ||
-      (currentAnswer?.textAnswer && currentAnswer.textAnswer.trim().length > 0)
-
-    if (hasAnswer) {
-      setLockedQuestions((prev) => new Set([...prev, currentQuestionIndex]))
-      toast({
-        title: "Answer Locked",
-        description: "Your answer has been locked and will be considered for evaluation.",
-        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
-      })
-    } else {
-      toast({
-        title: "No Answer Selected",
-        description: "Please select an answer before locking the question.",
-        variant: "destructive",
-        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
-      })
-    }
-  }
-
-  const handlePreviousQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1)
-    }
-  }
-
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
@@ -603,54 +585,43 @@ function AssessmentInterface() {
     return options.filter((option) => option.text && option.text.trim() !== "")
   }
 
-  const handleAnswerSelect = (answer: string) => {
-    if (lockedQuestions.has(currentQuestionIndex)) {
-      toast({
-        title: "Question Locked",
-        description: "You cannot change answers to locked questions.",
-        variant: "destructive",
-        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
-      })
-      return
-    }
-
+  const handleAnswerSelect = (optionKey: string) => {
     const currentQuestion = questions[currentQuestionIndex]
     const isMultipleChoice = currentQuestion.questionType === "MSQ"
 
     setAnswers((prev) =>
       prev.map((ans) => {
         if (ans.questionId === currentQuestion.id) {
+          let newAnswer
           if (isMultipleChoice) {
             const currentSelections = ans.selectedAnswer || []
-            const isSelected = currentSelections.includes(answer)
-            const maxSelections = 4
+            const isSelected = currentSelections.includes(optionKey)
 
             if (isSelected) {
-              return { ...ans, selectedAnswer: currentSelections.filter((a) => a !== answer) }
-            } else if (currentSelections.length < maxSelections) {
-              return { ...ans, selectedAnswer: [...currentSelections, answer] }
+              newAnswer = { ...ans, selectedAnswer: currentSelections.filter((a) => a !== optionKey) }
+            } else {
+              newAnswer = { ...ans, selectedAnswer: [...currentSelections, optionKey] }
             }
-            return ans
           } else {
-            return { ...ans, selectedAnswer: [answer] }
+            newAnswer = { ...ans, selectedAnswer: [optionKey] }
           }
+
+          return newAnswer
         }
         return ans
       }),
     )
+
+    setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+
+    toast({
+      title: "Answer Recorded",
+      description: "Your answer has been automatically saved and will be considered for evaluation.",
+      className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
+    })
   }
 
   const handleTextAnswerChange = (value: string) => {
-    if (lockedQuestions.has(currentQuestionIndex)) {
-      toast({
-        title: "Question Locked",
-        description: "You cannot change answers to locked questions.",
-        variant: "destructive",
-        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
-      })
-      return
-    }
-
     const currentQuestion = questions[currentQuestionIndex]
 
     setAnswers((prev) =>
@@ -661,11 +632,29 @@ function AssessmentInterface() {
         return ans
       }),
     )
+
+    if (value.trim()) {
+      setAnsweredQuestions((prev) => new Set([...prev, currentQuestionIndex]))
+
+      toast({
+        title: "Answer Recorded",
+        description: "Your answer has been automatically saved and will be considered for evaluation.",
+        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md",
+      })
+    } else {
+      setAnsweredQuestions((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(currentQuestionIndex)
+        return newSet
+      })
+    }
   }
 
   const currentQuestion = questions[currentQuestionIndex]
   const isNATQuestion = currentQuestion?.questionType === "NAT"
   const availableOptions = getAvailableOptions(currentQuestion)
+  const userName = studentInfo?.name
+  const answeredCount = answeredQuestions.size
 
   if (isRoutingToResults) {
     return (
@@ -728,7 +717,7 @@ function AssessmentInterface() {
         <Card className="w-full max-w-2xl">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-blue-700">Online Assessment</CardTitle>
-            <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
+            <p className="text-gray-600">Welcome, {userName}</p>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="bg-blue-50 p-6 rounded-lg space-y-4">
@@ -901,45 +890,39 @@ function AssessmentInterface() {
       <div className="min-h-screen bg-gray-50">
         <div className="bg-white shadow-sm border-b">
           <div className="container mx-auto p-4">
-            <div className="flex justify-between items-center">
-              <div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
                 <h1 className="text-2xl font-bold text-gray-900">Online Assessment</h1>
-                <p className="text-gray-600">Welcome, {studentInfo?.name}</p>
+                <p className="text-gray-600">Welcome, {userName}</p>
               </div>
               <div className="flex items-center gap-4">
                 <Button
-                  onClick={handleSubmitExam}
-                  disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to submit your exam? This action cannot be undone.")) {
+                      handleSubmitExam()
+                    }
+                  }}
+                  className="flex items-center gap-2 px-6 py-2 bg-green-600 hover:bg-green-700"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4" />
-                      Submit Assessment
-                    </>
-                  )}
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  Submit Assessment
                 </Button>
-                <Badge
-                  variant="outline"
-                  className={`flex items-center gap-2 ${
-                    timeRemaining < 300
-                      ? "border-red-500 text-red-700 bg-red-50"
-                      : timeRemaining < 600
-                        ? "border-yellow-500 text-yellow-700 bg-yellow-50"
-                        : "border-green-500 text-green-700 bg-green-50"
-                  }`}
-                >
-                  <Clock className="h-4 w-4" />
-                  {formatTime(timeRemaining)}
-                </Badge>
-                <Badge variant="secondary">
-                  {getLockedCount()} / {questions.length} Locked
-                </Badge>
+                <div className="flex items-center gap-2 bg-green-100 px-3 py-1 rounded-full">
+                  <Clock className="h-4 w-4 text-green-600" />
+                  <span className="text-green-700 font-medium">{formatTime(timeRemaining)}</span>
+                </div>
+                <div className="bg-blue-100 px-3 py-1 rounded-full">
+                  <span className="text-blue-700 font-medium">
+                    {answeredCount} / {questions.length} Answered
+                  </span>
+                </div>
               </div>
             </div>
             <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-2 mt-4" />
@@ -1074,42 +1057,6 @@ function AssessmentInterface() {
               </Button>
 
               <div className="flex gap-3">
-                <Button
-                  onClick={handleLockCurrentQuestion}
-                  disabled={lockedQuestions.has(currentQuestionIndex)}
-                  variant={lockedQuestions.has(currentQuestionIndex) ? "secondary" : "outline"}
-                  className={`flex items-center gap-2 px-6 py-2 ${
-                    lockedQuestions.has(currentQuestionIndex)
-                      ? "bg-green-100 text-green-800 border-green-300"
-                      : "hover:bg-blue-50 hover:border-blue-300"
-                  }`}
-                >
-                  {lockedQuestions.has(currentQuestionIndex) ? (
-                    <>
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 006 0z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Locked
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                        />
-                      </svg>
-                      Lock Answer
-                    </>
-                  )}
-                </Button>
-
                 {currentQuestionIndex < questions.length - 1 && (
                   <Button
                     onClick={handleNextQuestion}
@@ -1146,48 +1093,51 @@ function AssessmentInterface() {
             </div>
           </div>
 
-          <div className="w-80 bg-white shadow-sm border-l min-h-screen">
-            <div className="p-4 border-b">
+          {/* Question Navigation Panel */}
+          <div className="w-80 lg:w-96 xl:w-80 bg-white shadow-sm border-l min-h-screen flex flex-col">
+            <div className="p-4 border-b flex-shrink-0">
               <h3 className="font-semibold text-gray-900">Question Navigation</h3>
               <p className="text-xs text-gray-500 mt-1">Answered questions are locked and cannot be changed</p>
             </div>
-            <div className="p-4 h-[calc(100vh-120px)] overflow-y-auto">
-              <div className="grid grid-cols-5 gap-2">
-                {questions.map((_, index) => {
-                  const hasAnswer =
-                    (answers[index]?.selectedAnswer && answers[index].selectedAnswer.length > 0) ||
-                    (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
+            <div className="flex-1 relative">
+              <div className="absolute inset-0 p-4 overflow-y-auto">
+                <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-6 xl:grid-cols-5 gap-2 pb-8">
+                  {questions.map((_, index) => {
+                    const hasAnswer =
+                      (answers[index]?.selectedAnswer && answers[index].selectedAnswer.length > 0) ||
+                      (answers[index]?.textAnswer && answers[index].textAnswer.trim().length > 0)
 
-                  const isLocked = lockedQuestions.has(index)
-                  const canNavigate = true
+                    const isLocked = lockedQuestions.has(index)
+                    const canNavigate = true
 
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => canNavigate && setCurrentQuestionIndex(index)}
-                      disabled={!canNavigate}
-                      className={`w-12 h-12 rounded-lg text-sm font-medium transition-all relative ${
-                        index === currentQuestionIndex
-                          ? "bg-blue-600 text-white shadow-lg"
-                          : isLocked
-                            ? "bg-green-200 text-green-800 border-2 border-green-400"
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => canNavigate && setCurrentQuestionIndex(index)}
+                        disabled={!canNavigate}
+                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg text-xs sm:text-sm font-medium transition-all relative flex-shrink-0 ${
+                          index === currentQuestionIndex
+                            ? "bg-blue-600 text-white shadow-lg"
+                            : isLocked
+                              ? "bg-green-200 text-green-800 border-2 border-green-400"
+                              : hasAnswer
+                                ? "bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200"
+                                : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
+                        }`}
+                        title={
+                          isLocked
+                            ? "Question locked for evaluation"
                             : hasAnswer
-                              ? "bg-yellow-100 text-yellow-700 border border-yellow-300 hover:bg-yellow-200"
-                              : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
-                      }`}
-                      title={
-                        isLocked
-                          ? "Question locked for evaluation"
-                          : hasAnswer
-                            ? "Question has answer (not locked)"
-                            : "Question not answered"
-                      }
-                    >
-                      {index + 1}
-                      {isLocked && <span className="absolute -top-1 -right-1 text-xs">🔒</span>}
-                    </button>
-                  )
-                })}
+                              ? "Question has answer (not locked)"
+                              : "Question not answered"
+                        }
+                      >
+                        {index + 1}
+                        {isLocked && <span className="absolute -top-1 -right-1 text-xs">🔒</span>}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </div>

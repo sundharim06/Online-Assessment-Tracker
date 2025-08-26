@@ -38,7 +38,7 @@ export function AdminDashboard() {
 
   const handleLogin = () => {
     // Simple password authentication (in production, use proper auth)
-    if (password === "ennakuterla") {
+    if (password === "access#cit$33") {
       setIsAuthenticated(true)
       loadData()
       toast({
@@ -390,7 +390,6 @@ export function AdminDashboard() {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-500">Default password: ennakuterla</p>
             </div>
             <Button onClick={handleLogin} className="w-full bg-purple-600 hover:bg-purple-700">
               Login to Dashboard

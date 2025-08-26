@@ -16,10 +16,10 @@ export default function RAGDroidPage() {
   const { toast } = useToast()
 
   const handleLogin = () => {
-    if (password === "ennakuterla") {
+    if (password === "access#cit$33") {
       setIsAuthenticated(true)
       toast({
-        title: "RAG Droid Access Granted",
+        title: "Student Interface Access Granted",
         description: "You can now access the student assessment interface",
       })
     } else {
@@ -39,7 +39,7 @@ export default function RAGDroidPage() {
             <div className="flex justify-center mb-4">
               <Lock className="h-12 w-12 text-blue-600" />
             </div>
-            <CardTitle className="text-2xl text-blue-700">RAG Droid Access</CardTitle>
+            <CardTitle className="text-2xl text-blue-700">Student Interface Access</CardTitle>
             <CardDescription>Enter access password to use the student assessment interface</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -65,7 +65,7 @@ export default function RAGDroidPage() {
               </div>
             </div>
             <Button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-700">
-              Access RAG Droid
+              Access Student Interface
             </Button>
           </CardContent>
         </Card>

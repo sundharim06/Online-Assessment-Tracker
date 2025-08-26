@@ -31,6 +31,8 @@ export function AdminExamInterface() {
   const [lockedQuestions, setLockedQuestions] = useState<Set<number>>(new Set())
   const [examStarted, setExamStarted] = useState(false)
   const [examStartTime, setExamStartTime] = useState<Date | null>(null)
+  const [adminPassword, setAdminPassword] = useState("")
+  const [showPasswordInput, setShowPasswordInput] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -41,15 +43,21 @@ export function AdminExamInterface() {
   }
 
   const displayAllAnswers = () => {
+    const isPasswordCorrect = adminPassword === "9786"
+
     const correctAnswerSummary = questions
       .map((question, index) => {
         const questionNum = index + 1
         let correctAnswer = ""
 
-        if (question.questionType === "NAT") {
-          correctAnswer = question.correctAnswer || "N/A"
+        if (isPasswordCorrect) {
+          if (question.questionType === "NAT") {
+            correctAnswer = question.correctAnswer || "N/A"
+          } else {
+            correctAnswer = question.correctAnswer || "N/A"
+          }
         } else {
-          correctAnswer = question.correctAnswer || "N/A"
+          correctAnswer = "****" // Show blank/hidden when password is incorrect
         }
 
         return `${questionNum} ${correctAnswer}`
@@ -57,10 +65,35 @@ export function AdminExamInterface() {
       .join("...")
 
     console.clear()
-    console.log("🎯 CORRECT ANSWERS:")
-    console.log(correctAnswerSummary)
-    console.log("📊 Total Questions:", questions.length)
-    console.log("⏰ Updated:", new Date().toLocaleTimeString())
+    if (isPasswordCorrect) {
+      console.log("🎯 CORRECT ANSWERS:")
+      console.log(correctAnswerSummary)
+      console.log("📊 Total Questions:", questions.length)
+      console.log("⏰ Updated:", new Date().toLocaleTimeString())
+    } else {
+      console.log("🔒 ANSWERS PROTECTED - Enter correct password to view")
+      console.log("📊 Total Questions:", questions.length)
+      console.log("⏰ Updated:", new Date().toLocaleTimeString())
+    }
+  }
+
+  const handlePasswordSubmit = () => {
+    if (adminPassword === "9786") {
+      toast({
+        title: "Access Granted",
+        description: "Console answers are now visible",
+        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
+      })
+      setShowPasswordInput(false)
+      displayAllAnswers()
+    } else {
+      toast({
+        title: "Access Denied",
+        description: "Incorrect password",
+        variant: "destructive",
+        className: "fixed top-4 left-1/2 transform -translate-x-1/2 z-50",
+      })
+    }
   }
 
   useEffect(() => {
@@ -414,6 +447,14 @@ export function AdminExamInterface() {
             </div>
             <div className="flex items-center gap-4">
               <Button
+                onClick={() => setShowPasswordInput(!showPasswordInput)}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                🔑 Console Access
+              </Button>
+              <Button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
                 className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
@@ -448,6 +489,23 @@ export function AdminExamInterface() {
               </Badge>
             </div>
           </div>
+          {showPasswordInput && (
+            <div className="mt-4 p-4 bg-gray-100 rounded-lg">
+              <div className="flex items-center gap-2 max-w-md">
+                <input
+                  type="password"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  onKeyPress={(e) => e.key === "Enter" && handlePasswordSubmit()}
+                />
+                <Button onClick={handlePasswordSubmit} size="sm">
+                  Unlock
+                </Button>
+              </div>
+            </div>
+          )}
           <Progress value={progress} className="h-2 mt-4" />
         </div>
       </div>
